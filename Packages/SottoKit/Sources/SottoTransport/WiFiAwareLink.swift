@@ -62,10 +62,8 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
     }
 
     private func finish(_ reason: LinkCloseReason) {
-        lock.lock()
-        guard isOpen else { lock.unlock(); return }
-        isOpen = false
-        lock.unlock()
+        let wasOpen: Bool = lock.withLock { let o = isOpen; isOpen = false; return o }
+        guard wasOpen else { return }
         continuation.yield(.closed(reason))
         continuation.finish()
     }

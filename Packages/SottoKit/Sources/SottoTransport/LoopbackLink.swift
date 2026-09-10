@@ -93,13 +93,13 @@ public final class LoopbackLink: Link, @unchecked Sendable {
     }
 
     public func send(_ packet: Packet) async throws {
-        let (pair, peer, open): (LoopbackLinkPair?, LoopbackLink?, Bool) = { lock.lock(); defer { lock.unlock() }; sentCount += 1; return (self.pair, self.peer, isOpen) }()
+        let (pair, peer, open): (LoopbackLinkPair?, LoopbackLink?, Bool) = lock.withLock { sentCount += 1; return (self.pair, self.peer, isOpen) }
         guard open, let pair, let peer else { throw LinkError.notReady }
         await pair.enqueue(packet, to: peer)
     }
 
     public func close() async {
-        let peer: LoopbackLink? = { lock.lock(); defer { lock.unlock() }; guard isOpen else { return nil }; isOpen = false; return self.peer }()
+        let peer: LoopbackLink? = lock.withLock { guard isOpen else { return nil }; isOpen = false; return self.peer }
         guard let peer else { return }
         continuation.yield(.closed(.local))
         continuation.finish()

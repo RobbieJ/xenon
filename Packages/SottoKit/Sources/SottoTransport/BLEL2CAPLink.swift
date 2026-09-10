@@ -6,9 +6,10 @@ import SottoCore
 /// GATT service the peripheral side advertises. The PSM characteristic carries the dynamic
 /// L2CAP PSM as a little-endian UInt16 (iOS never assigns fixed PSMs).
 public enum SottoBLE {
-    public static let serviceUUID = CBUUID(string: "5A7A0001-9B1E-4C1E-8F3A-4B5C6D7E8F90")
-    public static let psmCharacteristicUUID = CBUUID(string: "5A7A0002-9B1E-4C1E-8F3A-4B5C6D7E8F90")
-    public static let identityCharacteristicUUID = CBUUID(string: "5A7A0003-9B1E-4C1E-8F3A-4B5C6D7E8F90")
+    // Computed rather than stored: CBUUID is not Sendable, so a static let is rejected under strict concurrency.
+    public static var serviceUUID: CBUUID { CBUUID(string: "5A7A0001-9B1E-4C1E-8F3A-4B5C6D7E8F90") }
+    public static var psmCharacteristicUUID: CBUUID { CBUUID(string: "5A7A0002-9B1E-4C1E-8F3A-4B5C6D7E8F90") }
+    public static var identityCharacteristicUUID: CBUUID { CBUUID(string: "5A7A0003-9B1E-4C1E-8F3A-4B5C6D7E8F90") }
 }
 
 /// A `Link` over a `CBL2CAPChannel`. The channel is a byte stream, so packets are framed with
@@ -60,14 +61,16 @@ public final class BLEL2CAPLink: NSObject, Link, StreamDelegate, @unchecked Send
     }
 
     public func send(_ packet: Packet) async throws {
-        lock.lock()
-        guard isOpen else { lock.unlock(); throw LinkError.notReady }
-        sendQueue.append(packet.encoded())
-        if sendQueue.count > maximumQueuedFrames {
-            sendQueue.removeFirst()
-            droppedFrames += 1
+        let accepted: Bool = lock.withLock {
+            guard isOpen else { return false }
+            sendQueue.append(packet.encoded())
+            if sendQueue.count > maximumQueuedFrames {
+                sendQueue.removeFirst()
+                droppedFrames += 1
+            }
+            return true
         }
-        lock.unlock()
+        guard accepted else { throw LinkError.notReady }
         pump()
     }
 
@@ -114,10 +117,8 @@ public final class BLEL2CAPLink: NSObject, Link, StreamDelegate, @unchecked Send
     }
 
     private func finish(_ reason: LinkCloseReason) {
-        lock.lock()
-        guard isOpen else { lock.unlock(); return }
-        isOpen = false
-        lock.unlock()
+        let wasOpen: Bool = lock.withLock { let o = isOpen; isOpen = false; return o }
+        guard wasOpen else { return }
         channel.inputStream.close()
         channel.outputStream.close()
         continuation.yield(.closed(reason))
