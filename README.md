@@ -19,7 +19,11 @@ Research and planning. No app code yet. Start with:
 | Document | What it is |
 | --- | --- |
 | [docs/PLAN.md](docs/PLAN.md) | The approach, architecture, roadmap and open questions. Read this first. |
-| [docs/research/](docs/research/) | The underlying research reports (transport, audio, codec, iOS 27, product). |
+| [docs/research/01-transport.md](docs/research/01-transport.md) | Phone-to-phone link options: BLE L2CAP, MultipeerConnectivity, AWDL, Wi-Fi Aware. |
+| [docs/research/02-airpods-audio.md](docs/research/02-airpods-audio.md) | AirPods microphone path, audio session, voice processing, interfering AirPods features. |
+| [docs/research/03-codec-and-latency.md](docs/research/03-codec-and-latency.md) | Codec choice, packet format, jitter buffer, mouth-to-ear latency budget. |
+| [docs/research/04-ios27-platform.md](docs/research/04-ios27-platform.md) | What iOS 27 and WWDC26 changed, call frameworks, background rules, App Store review. |
+| [docs/research/05-product-ux-prior-art.md](docs/research/05-product-ux-prior-art.md) | Competing apps, Apple's built-in alternatives, pairing UX, aircraft constraints. |
 | [docs/adr/](docs/adr/) | Architecture decision records. One file per decision. |
 
 ## Target platform

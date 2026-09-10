@@ -1,0 +1,131 @@
+# Research: iOS 27 / WWDC26 landscape for a phone-to-phone AirPods intercom app
+
+*Research date: 10 September 2026. Confidence scale: **High** = Apple documentation, Apple Newsroom, Apple session, or Apple's release pages; **Medium** = reputable press (MacRumors/9to5Mac/AppleInsider/Macworld) or DTS forum answers; **Low** = blogs, rumour, or inference. The researcher's web-search budget ran out near the end, so a handful of items are marked "not verified" rather than guessed.*
+
+---
+
+## 1. iOS 27, WWDC 2026, Xcode 27 — what is confirmed
+
+**Timeline (High):**
+- WWDC26 keynote 8 June 2026; iOS 27 developer beta 1 (24A5355q) and Xcode 27 beta (27A5194q) same day — [Apple Releases page](https://developer.apple.com/news/releases/).
+- Public beta: 13 July 2026 (Medium — [Wikipedia iOS 27](https://en.wikipedia.org/wiki/IOS_27); Apple's newsroom only says "next month").
+- iOS 27.0 RC (24A435) and Xcode 27 RC (27A266a): 9 September 2026 (High — Apple Releases page).
+- Public release: **Monday 14 September 2026** (Medium-High — [MacRumors](https://www.macrumors.com/2026/09/09/apple-announces-ios-27-release-date/), [AppleInsider](https://appleinsider.com/articles/26/09/09/ios-27-arrives-on-september-14-heres-what-youll-get), reporting Apple's own statement at the 9 Sept event).
+- Device support: iPhone 11 / A13 and later, i.e. no models dropped vs iOS 26 (Medium — [MacRumors roundup](https://www.macrumors.com/roundup/ios-27/), Wikipedia).
+
+**Xcode 27 / Swift (High — [Apple Xcode support table](https://developer.apple.com/support/xcode/), [Xcode 27 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes)):** Swift 6.4 compiler (Xcode 26.6 shipped Swift 6.3); requires macOS Tahoe 26.6+; Apple silicon only; deployment target range **iOS 15–27**, watchOS 9–27, macOS 12–27. For your app, the only realistic choice is `iOS 27.0` minimum because Wi-Fi Aware (26.0), `WASharedSecret` (26.4), `WAPerformanceForecast` (27.0) and the modern `NetworkConnection` APIs (26.0) all gate on 26+. Community commentary: [Michael Tsai — Xcode 27 announced](https://mjtsai.com/blog/2026/06/09/xcode-27-announced/).
+
+**Headline platform changes (High — [Apple Newsroom WWDC26 release](https://www.apple.com/newsroom/2026/06/apple-unveils-next-generation-of-apple-intelligence-siri-ai-and-more/)):** "Siri AI" (chatbot-style Siri with personal context, on-screen awareness, app actions via App Intents), next-gen Apple Intelligence (image generation on Private Cloud Compute with daily limits), Liquid Glass personalisation slider, ~30% faster app launch, 80% faster AirDrop, Screen Time/parental controls. Apple Intelligence/Siri AI require iPhone 15 Pro or later; Siri AI is **not initially available on iOS in the EU** and **not in China**. Custom EQ for H2 AirPods.
+
+Per-area relevance to this project:
+
+| Area | iOS 27 change | Confidence / source |
+|---|---|---|
+| AVFoundation / Core Audio / AVAudioSession | **No new audio-session API in the iOS 27 RC release notes**; no Core Audio/AVAudioSession sections at all. New **Now Playing framework** (session 312) replaces MPNowPlayingInfoCenter for media apps — not for calls. New Music Understanding framework (253). | High — [iOS 27 RC release notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes); [wwdc.ai session index](https://wwdc.ai/2026) |
+| AirPods | User-facing: custom EQ, redesigned AirPods settings, Precision Finding for Pro 3 via Watch; AirPods Max 2 firmware beta path fixed in beta 2. No new AirPods developer API found. | High for features (Newsroom); the "no new API" is an absence-of-evidence claim (Medium) |
+| Core Bluetooth | **Bluetooth Channel Sounding**: `CBPeripheral.startChannelSoundingSession(_:)` (iOS 27.0+) for distance; via Nearby Interaction for distance + direction with camera assistance. **Requires N1-chip iPhone and an accessory supporting Bluetooth 6.3 — explicitly not iPhone-to-iPhone.** | High — [session 369 summary](https://wwdc.ai/2026/369), [API doc](https://developer.apple.com/documentation/corebluetooth/cbperipheral/startchannelsoundingsession(_:)), RC notes (bugs 178333845/178073051 fixed) |
+| AccessorySetupKit | No iOS 27 changes found; still the accessory-pairing path alongside DeviceDiscoveryUI. | Medium (absence of evidence) |
+| Network / Wi-Fi Aware | New **`WAPerformanceForecast`** (iOS 27.0+): `signalStrength`, `localThroughputCapacity/Ceiling`, `unavailabilityLatencyCeiling`, timestamps. TN3213 notes Wi-Fi Aware + QUIC "unsupported prior to iOS 27". | High — [WAPerformanceForecast doc](https://developer.apple.com/documentation/wifiaware/waperformanceforecast); [TN3213](https://developer.apple.com/documentation/technotes/tn3213-moving-from-multipeer-connectivity-to-network-framework) |
+| MultipeerConnectivity | **Formally deprecated.** Apple doc: "Multipeer Connectivity is deprecated. Migrate any code using this framework to the Network framework… see TN3213." TN3213 says deprecated as of Xcode 27. | High — [MC docs](https://developer.apple.com/documentation/multipeerconnectivity), TN3213 |
+| Nearby Interaction / UWB | DL-TDoA ranging section appears in NI docs (anchor-based indoor positioning); press says new in iOS 27. Nothing new for phone-to-phone ranging. | Medium — [NI docs](https://developer.apple.com/documentation/nearbyinteraction), [MobileKnowledge](https://www.themobileknowledge.com/news/ios-27-brings-uwb-indoor-navigation-closer-to-commercial-reality/) |
+| CallKit / LiveCommunicationKit | WWDC26 session 226 "Create live communication experiences" positions **LiveCommunicationKit as "the modern replacement for traditional approaches such as CXProvider"**, with Lock Screen, Dynamic Island, Recents, Siri/Spotlight entry points. CallKit docs carry **no deprecation**. No CallKit/LCK/PTT entries in RC release notes. | High — [session 226](https://wwdc.ai/2026/226); [CallKit docs](https://developer.apple.com/documentation/callkit) |
+| Speech | No new Speech symbols marked iOS 27; release notes only mention system Dictation gaining a new on-device model ("Advanced Dictation Preview"). SpeechAnalyzer/SpeechTranscriber remain the iOS 26 baseline. | High — [Speech docs](https://developer.apple.com/documentation/speech); RC notes |
+| Live Translation | No new third-party translation surface beyond the iOS 26 CallKit/LCK translation actions (see §2). | Medium |
+| Foundation Models | Session 241: rebuilt on-device model with **vision (image attachments)** and better tool calling; `PrivateCloudComputeLanguageModel` (32K context, no API keys); new `LanguageModel` protocol so third-party providers plug in; Profiles; token-usage APIs; Evaluations framework; `fm` CLI. | High — [session 241](https://developer.apple.com/videos/play/wwdc2026/241/) |
+| Liquid Glass | `UIDesignRequiresCompatibility` is **ignored when building with the 27 SDKs** — Liquid Glass is effectively mandatory. User translucency slider. | High — [UIDesignRequiresCompatibility doc](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility) |
+| App Intents | Sessions 343/345: `ValueRepresentation`, `LongRunningIntent`, App Schemas for Siri; App Intents is the Siri surface. Press reports SiriKit formal deprecation (Medium). | High/Medium — [Use Your Loaf viewing guide](https://useyourloaf.com/blog/wwdc-2026-viewing-guide/) |
+| SwiftUI | **Breaking:** `@State` is now a macro — don't give a declaration initial value *and* assign in `init`. `textSelection(.enabled)` interactive; toolbar visibility-priority APIs. | High — RC release notes |
+| Background execution | **No BackgroundTasks / ActivityKit changes in RC notes.** Live Activities session 223: Dynamic Island compact/minimal now visible in **landscape** on iOS 27 (`isDynamicIslandLimitedInWidth`). | High — RC notes; [session 223](https://wwdc.ai/2026/223) |
+
+Unverified claims from a third-party blog ([rabinarayanpatra.com](https://www.rabinarayanpatra.com/blogs/ios-27-for-developers)): launch screen key now mandatory; scene-based lifecycle mandatory; On Demand Resources deprecated (the ODR one *is* in Xcode notes per Releasebot). Treat the first two as **Low** until checked against Apple text.
+
+---
+
+## 2. iOS 26 baseline (WWDC 2025) features you will rely on
+
+- **Wi-Fi Aware framework (iOS 26.0+)** — peer-to-peer Wi-Fi with no AP/internet; entitlement `com.apple.developer.wifi-aware` (array of `Publish`/`Subscribe`, enabled via Xcode capability, no request form); Info.plist `WiFiAwareServices` dictionary keyed by `_name._tcp|udp` (≤15 chars) with `Publishable`/`Subscribable` sub-dicts; `NetworkListener`/`NetworkBrowser`/`NetworkConnection`; `WAPerformanceMode.realtime` vs `.bulk` (must match on both sides; `.bulk` default); `WAAccessCategory` includes `.interactiveVoice`; live `WAPerformanceReport` (`signalStrength`, per-category `transmitLatency`). 26.4 adds `WASharedSecret` (PAKE-derived secret for TLS-PSK/QUIC without UI) and multiple `NWConnection`s per pairing. **High** — [Wi-Fi Aware docs](https://developer.apple.com/documentation/WiFiAware), [entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.wifi-aware), [WiFiAwareServices](https://developer.apple.com/documentation/bundleresources/information-property-list/wifiawareservices), [Building peer-to-peer apps](https://developer.apple.com/documentation/wifiaware/building-peer-to-peer-apps), [WASharedSecret](https://developer.apple.com/documentation/wifiaware/washaredsecret), [DTS thread on multi-connection](https://developer.apple.com/forums/thread/818708).
+- **DeviceDiscoveryUI on iOS (26.0+)** — `DevicePairingView` (publisher) + `DevicePicker` (subscriber); system handles PIN/confirmation; pairings persist as `WAPairedDevice`. **High** — [DeviceDiscoveryUI docs](https://developer.apple.com/documentation/devicediscoveryui).
+- **AirPods studio-quality recording** — `AVAudioSession.CategoryOptions.bluetoothHighQualityRecording` (iOS 26.0+): full-bandwidth Bluetooth mic on H2 AirPods, `.default` mode only, falls back to `allowBluetoothHFP`. **Two caveats that matter to you:** Apple states it "may increase input latency… isn't recommended for real-time communication usage" and "isn't currently supported in the European Union". **High** — [API doc](https://developer.apple.com/documentation/avfaudio/avaudiosession/categoryoptions-swift.struct/bluetoothhighqualityrecording), [WWDC25 251](https://developer.apple.com/videos/play/wwdc2025/251/).
+- **SpeechAnalyzer / SpeechTranscriber / SpeechDetector (iOS 26)** — fully on-device, long-form, asset-managed models; needs `NSSpeechRecognitionUsageDescription` + mic permission. **High** — [Speech docs](https://developer.apple.com/documentation/speech).
+- **Foundation Models (iOS 26)** — `LanguageModelSession`, `@Generable`, tool calling on the ~3B on-device model. **High** — session 241 above.
+- **Liquid Glass (iOS 26)** with temporary `UIDesignRequiresCompatibility` opt-out (gone at SDK 27). **High**.
+- **Live Translation with AirPods (iOS 26)** — system feature; requires AirPods 4 ANC / Pro 2 / Pro 3 / Max 2 (now also AirPods 5), iPhone 15 Pro+ with Apple Intelligence. Developer surface: CallKit `CXSetTranslatingCallAction` (iOS 26.0+) and LCK `SetTranslatingAction` let *VoIP calls reported to the system* get captions/transcripts/translated audio — no third-party access to the AirPods in-person translation mode. **High** — [Apple Support 123185](https://support.apple.com/en-us/123185), [CXSetTranslatingCallAction](https://developer.apple.com/documentation/callkit/cxsettranslatingcallaction), [forum 789314](https://developer.apple.com/forums/thread/789314).
+- **AirPods Pro 3 hearing features** — Hearing Test, Hearing Aid (mild-moderate loss, auto Conversation Boost), Hearing Protection; heart-rate PPG. Region-restricted. **High** — [Apple Newsroom Sept 2025](https://www.apple.com/newsroom/2025/09/introducing-airpods-pro-3-the-ultimate-audio-experience/).
+- **Background:** `BGContinuedProcessingTask` (iOS 26) for user-initiated finish-in-background work. **High** — [WWDC25 227](https://developer.apple.com/videos/play/wwdc2025/227/).
+- **Network framework Swift API (iOS 26)** — `NetworkConnection/Listener/Browser`, QUIC recommended; MC migration guide TN3213. **High**.
+- CallKit/LCK/PushToTalk got new **diagnostic dialogs** for VoIP-push misuse in iOS 26 (Medium — forum summaries).
+
+---
+
+## 3. AirPods hardware & firmware landscape (September 2026)
+
+From Apple's compare page and newsroom (**High** — [compare](https://www.apple.com/airpods/compare/), [AirPods 5 newsroom](https://www.apple.com/newsroom/2026/09/apple-introduces-airpods-5-with-best-in-class-open-ear-active-noise-cancellation/), [AirPods 5 specs](https://www.apple.com/airpods-5/specs/), [AirPods Max 2 newsroom](https://www.apple.com/newsroom/2026/03/apple-introduces-airpods-max-2-powered-by-h2/)):
+
+| Model | Chip / BT | ANC | Adaptive Audio / Conv. Awareness | Hearing Aid/Test | Live Translation | Studio-quality rec. |
+|---|---|---|---|---|---|---|
+| AirPods 5 (Sept 2026, $129/$149, ships 18 Sept) | H2 / 5.3 | Yes (open-ear, +50% vs AirPods 4 ANC) | Yes / Yes | No | Yes | Yes |
+| AirPods 4 | H2 / 5.3 | No | No / No | No | No | Yes (H2) |
+| AirPods 4 ANC | H2 / 5.3 | Yes | Yes / Yes | No | Yes | Yes |
+| AirPods Pro 2 | H2 / 5.3 | Yes | Yes / Yes | Yes | Yes | Yes |
+| AirPods Pro 3 (Sept 2025) | H2 / 5.3 | Yes (2× Pro 2) | Yes / Yes | Yes + HR sensor | Yes | Yes |
+| AirPods Max 2 (Mar 2026) | H2 / 5.3 | Yes | Yes / Yes | No | Yes | Yes |
+| AirPods Max (2020) | H1 / 5.0 | Yes | No (Max 2 brought these) | No | No | No |
+
+**No new AirPods Pro at the Sept 2026 event** — only AirPods 5 (Medium-High — [MacRumors recap](https://www.macrumors.com/2026/09/09/apple-september-2026-event-recap/)). **LE Audio/LC3:** Apple lists **no** LE Audio support for any AirPods; Bluetooth 5.3 on all H2 models, Bluetooth 6 only on the iPhone side (N1 chip in iPhone 17 family, iPhone Air, iPhone 18 Pro, iPhone Duo). Rumours of LC3 for HFP in AirPods firmware are unconfirmed (Low — [MacRumors 2022](https://www.macrumors.com/2022/09/07/iphone-14-new-airpods-pro-bluetooth-5-3/)). Practically: iOS exposes no codec selection; your mic path is HFP (narrow/wideband) or the iOS 26 high-quality mode, and your playback path is A2DP/AAC or the HFP bidirectional link. Sources: [MacRumors N1](https://www.macrumors.com/2025/09/09/iphone-17-n1-chip/), [Apple iPhone 18 Pro newsroom](https://www.apple.com/cf/newsroom/2026/09/apple-debuts-iphone-18-pro-and-iphone-18-pro-max/).
+
+---
+
+## 4. CallKit (and LiveCommunicationKit) for a local, non-network call
+
+- **No VoIP push required for a locally-signalled call.** PushKit is only mandatory for *incoming calls delivered by VoIP push*; the iOS 13 rule ("report every VoIP push to CallKit or be terminated") does not apply if you never use VoIP pushes. Outgoing: `CXStartCallAction` via `CXCallController`, then `reportOutgoingCall(with:startedConnectingAt:/connectedAt:)`. The callee can call `reportNewIncomingCall` from its own running process when it receives your invite over Wi-Fi Aware/BLE. **High** (CallKit docs; the constraint is documented on PushKit not on local reports) — [CallKit](https://developer.apple.com/documentation/callkit).
+- **Benefits (High):** system call UI on Lock Screen/Dynamic Island; the provider's `didActivate audioSession` gives your `AVAudioEngine` a call-priority session that interrupts media and survives backgrounding; Do Not Disturb/Focus treatment as a call; AirPods stem press → `CXEndCallAction`/mute routed through the provider; entry in Recents; Siri "call X".
+- **Restrictions:** CallKit UI is banned on the **China App Store** since 2018 (MIIT); apps must disable it for CN. **High** — [AppleInsider 2018](https://appleinsider.com/articles/18/05/21/callkit-iphone-apps-pulled-from-chinese-app-store-amid-new-government-crackdown), [forum 772808](https://developer.apple.com/forums/thread/772808). Guideline 2.5.4 permits background use for "VoIP, audio playback…" — a two-phone intercom is a bona-fide voice call, but don't label it "VoIP" in metadata if there is no IP path; describe it as a local voice call.
+- **LiveCommunicationKit (iOS 17.4+)** — `ConversationManager`, `StartConversationAction` (app-initiated, no push needed), `JoinConversationAction`, `SetTranslatingAction`, `ConversationHistoryManager`; WeChat adopted it partly because it is usable in China. Earlier reporting said LCK showed no full-screen lock UI and no Recents; **WWDC26 session 226 now describes full-screen Lock Screen, Dynamic Island and Recents integration and calls LCK "the modern replacement for … CXProvider".** **High** for Apple positioning — [LCK docs](https://developer.apple.com/documentation/livecommunicationkit), [session 226](https://wwdc.ai/2026/226), [TechNode 2025](https://technode.com/2025/01/23/wechat-tests-new-call-answering-feature-on-ios-ditches-callkit-for-livecommunicationkit/), [Sinch LCK guide](https://developers.sinch.com/docs/in-app-calling/getting-started/ios/make-call-lck).
+- **Recommendation:** for an iOS 27-only SwiftUI app, build on **LiveCommunicationKit** (Swift-native, async, Apple's stated direction, China-safe) and keep the audio-session activation pattern identical to CallKit. CallKit is not deprecated, so it is a safe fallback if LCK proves rough on lock-screen behaviour in testing.
+- **PushToTalk framework** is *not* a fit: it requires an APNs `pushtotalk` token/server (Local Push Connectivity needs a restricted entitlement and a fixed SSID) and is half-duplex. **High** — [PushToTalk docs](https://developer.apple.com/documentation/pushtotalk), [WWDC20 10113](https://developer.apple.com/videos/play/wwdc2020/10113/).
+
+---
+
+## 5. Background execution for continuous audio + Bluetooth
+
+- Declare `UIBackgroundModes`: `audio` (keeps the process alive **only while an audio session with an active I/O is running** — a `playAndRecord` `AVAudioEngine` with live render callbacks counts; silence-gating that stops the engine will get you suspended), plus `bluetooth-central` and `bluetooth-peripheral` if you use Core Bluetooth for signalling/fallback. Core Bluetooth background scanning requires explicit service UUIDs and is slower; state preservation/restoration relaunches you for BLE events. **High** — [Core Bluetooth background guide](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/CoreBluetoothBackgroundProcessingForIOSApps/PerformingTasksWhileYourAppIsInTheBackground.html), [CBCentralManager](https://developer.apple.com/documentation/corebluetooth/cbcentralmanager).
+- Using CallKit/LCK's system-activated audio session is the cleanest way to hold the mic in the background with call priority; the **orange microphone indicator** is shown whenever your app captures audio (system behaviour, unavoidable; Control Center reveals the app) — Apple's status-icons page: https://support.apple.com/guide/iphone/learn-the-meaning-of-iphone-status-icons-iphef7bb57dc/ios (page fetch didn't render; **Medium**).
+- Wi-Fi Aware in the background is **not documented**; DTS advice is to stop network operations when done. With the audio mode keeping the process alive, sockets stay open in practice — validate on device. (**Medium/Low**.)
+- **Dynamic Island "on a call":** CallKit/LCK gives it for free. If you do *not* use them, use ActivityKit; iOS 27 adds landscape compact/minimal presentations. New guideline 4.5.3 bans Live Activities used for spam. NI background ranging with a Live Activity exists since 18.4. **High** — [session 223](https://wwdc.ai/2026/223), [guidelines](https://developer.apple.com/app-store/review/guidelines/).
+- **iOS 27 changes:** none to background audio, Bluetooth, or BackgroundTasks in the RC release notes (**High**, absence of evidence).
+
+---
+
+## 6. Frictionless pairing between two iPhones without a network
+
+| Option | Status | Notes |
+|---|---|---|
+| **DeviceDiscoveryUI + Wi-Fi Aware** (26+) | Available, Apple-recommended | Both users open the app; one taps "Host" (`DevicePairingView`), other picks it in `DevicePicker`; system PIN/confirm; pairing persists, so second time it is one tap. No Local Network prompt. `.realtime` + `.interactiveVoice` are purpose-built for your traffic. **High** |
+| **`WASharedSecret` / out-of-band** (26.4+) | Available | Lets you bootstrap TLS-PSK/QUIC without the picker — e.g. a QR code shown by the host and scanned by the guest. **High** |
+| Nearby Interaction (UWB) | Needs a bootstrap channel (MC is deprecated → use BLE or Wi-Fi Aware) | Good for a "hold phones together" gesture on U1/U2 iPhones; foreground only unless Live Activity. **High** — [NI docs](https://developer.apple.com/documentation/nearbyinteraction) |
+| Core NFC | **No iPhone-to-iPhone peer mode**; Core NFC is tag reader/writer only; the NFC & SE Platform (iOS 26.4 changes) is for payments/keys, not P2P. NameDrop's NFC handshake is not exposed. **High** — [Core NFC](https://developer.apple.com/documentation/corenfc), [NFC & SE platform](https://developer.apple.com/support/nfc-se-platform/) |
+| QR / App Clip Code | Available | Best for a guest who lacks the app: App Clip launches, joins via Wi-Fi Aware/BLE. **High** |
+| AirDrop / Shared with You | AirDrop can carry a universal link; Shared with You is Messages-only, needs network — not useful. **Medium** |
+| BLE RSSI | Available; coarse; works for auto-discovery of nearby app users, and iPhone-as-peripheral + L2CAP gives a (~tens of kbps, ~20–40 ms interval) fallback audio path — enough for Opus at 16–24 kbps but marginal. **Medium** — [Memfault BLE throughput](https://interrupt.memfault.com/blog/ble-throughput-primer) |
+
+**Recommended flow:** on first use, both open the app → Wi-Fi Aware pairing via DeviceDiscoveryUI (system UI, ~3 taps) → persisted `WAPairedDevice` so subsequent sessions auto-connect when either taps "Talk"; expose a QR/App Clip path for guests; keep a BLE L2CAP fallback for aircraft where Wi-Fi radios may be objectionable. Do not build on MultipeerConnectivity (deprecated; DTS: "avoid Multipeer Connectivity" — [forum 813963](https://developer.apple.com/forums/thread/813963)).
+
+---
+
+## 7. App Store review considerations
+
+- **Privacy manifest** (`PrivacyInfo.xcprivacy`) with required-reason API entries has been mandatory since May 2024; third-party SDKs on Apple's list must ship their own. **High** — [Privacy manifest files](https://developer.apple.com/documentation/bundleresources/privacy-manifest-files), [TN3183](https://developer.apple.com/documentation/technotes/tn3183-adding-required-reason-api-entries-to-your-privacy-manifest).
+- **Purpose strings:** `NSMicrophoneUsageDescription`; `NSBluetoothAlwaysUsageDescription` (required whenever you touch Core Bluetooth); `NSLocalNetworkUsageDescription` — required for any Bonjour/peer-to-peer use via plain Network framework, but Apple states DeviceDiscoveryUI/Wi-Fi Aware pairing **does not require full Local Network access** (include the key anyway if you also use Bonjour fallback); `NSSpeechRecognitionUsageDescription` if you add SpeechAnalyzer captions; `NSNearbyInteractionUsageDescription` if you add UWB. Guideline 5.1.1(ii): purpose strings must "clearly and completely describe your use of the data". **High** — [NSLocalNetworkUsageDescription](https://developer.apple.com/documentation/bundleresources/information-property-list/nslocalnetworkusagedescription), [NSBluetoothAlwaysUsageDescription](https://developer.apple.com/documentation/bundleresources/information-property-list/nsbluetoothalwaysusagedescription).
+- **Wi-Fi Aware:** entitlement `com.apple.developer.wifi-aware` = [`Publish`, `Subscribe`] via Xcode capability; `WiFiAwareServices` in Info.plist; runtime check `WACapabilities.supportedFeatures.contains(.wifiAware)`; physical devices only. **High**.
+- **Guidelines that bite an intercom app:** 2.5.4 (background modes only for intended purposes — your continuous audio is legitimate, but never keep the session alive with silence); 4.5.3 (Live Activities not for unsolicited messages); **4.3(b) June 2026** (Apple can now reject *and remove* apps "indistinguishable from what is already widely available" — walkie-talkie/intercom is a crowded category, so lead with the offline AirPods full-duplex differentiator in metadata); 1.2 (Feb 2026: random/anonymous chat needs UGC controls — you're invite-only, so document that); 5.1.2 (disclose any third-party AI use — Foundation Models on-device avoids this). **High** — [guidelines](https://developer.apple.com/app-store/review/guidelines/), [MacRumors on 4.3(b)](https://www.macrumors.com/2026/06/09/app-store-guidelines-low-quality-apps/), [AppCompliance summary](https://appcompliance.io/blog/apple-2026-app-review-guideline-changes/).
+- **Regional:** CallKit disabled for China; `bluetoothHighQualityRecording` unavailable in the EU; Apple Intelligence/Siri AI/Live Translation region- and language-limited. **High**.
+
+---
+
+## Key design implications (summary)
+
+1. Target **iOS 27.0**, Swift 6.4, SwiftUI with Liquid Glass (no opt-out). Watch the `@State` macro change.
+2. Transport: **Wi-Fi Aware + Network framework (QUIC or UDP, `.realtime`, `.interactiveVoice`)**, pairing via DeviceDiscoveryUI, `WASharedSecret` for QR onboarding, `WAPerformanceForecast/Report` to drive bitrate; BLE L2CAP as fallback. MultipeerConnectivity is deprecated.
+3. Audio: `AVAudioEngine` on a `playAndRecord` session activated by **LiveCommunicationKit** (or CallKit); do **not** use `bluetoothHighQualityRecording` for the live path (Apple says higher latency, not for RTC, unavailable in EU) — consider it only for an optional "record this conversation" feature.
+4. Channel Sounding and Live Translation are not usable phone-to-phone by third parties; SpeechAnalyzer + Foundation Models can provide on-device captions/summary.
+5. Not verified this session (search budget exhausted): the exact Apple text on the status-bar orange indicator page; the third-party claims about mandatory launch screens/scene lifecycle in SDK 27; whether iOS 27 changed LCK lock-screen behaviour vs the 2025 WeChat reports beyond what session 226 states.
