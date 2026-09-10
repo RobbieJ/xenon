@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  package-linux:
+    name: SottoKit tests (Linux, Swift 6.3)
+    runs-on: ubuntu-24.04
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        working-directory: Packages/SottoKit
+        run: swift test --parallel
+
+  package-macos:
+    name: SottoKit tests (macOS, includes AVFAudio and CoreBluetooth code)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Test
+        working-directory: Packages/SottoKit
+        run: swift test --parallel
+
+  app-ios:
+    name: Sotto app build (iOS, no signing)
+    runs-on: macos-26
+    # Needs Xcode 27 for the iOS 27 SDK. Advisory until the runner images carry it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build for device without signing
+        run: |
+          xcodebuild -project Sotto.xcodeproj -scheme Sotto -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" build | tail -50

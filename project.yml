@@ -1,0 +1,77 @@
+# XcodeGen specification. Generate the project on a Mac with:
+#   brew install xcodegen && xcodegen generate
+# The generated Sotto.xcodeproj is git-ignored; this file is the source of truth.
+name: Sotto
+options:
+  bundleIdPrefix: uk.org.shadowtech
+  deploymentTarget:
+    iOS: "27.0"
+  xcodeVersion: "27.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "27.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  SottoKit:
+    path: Packages/SottoKit
+targets:
+  Sotto:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sotto/Sources
+      - path: Sotto/Resources
+    dependencies:
+      - package: SottoKit
+        product: SottoCore
+      - package: SottoKit
+        product: SottoAudio
+      - package: SottoKit
+        product: SottoTransport
+    entitlements:
+      path: Sotto/Sotto.entitlements
+      properties:
+        com.apple.developer.wifi-aware: [Publish, Subscribe]
+    info:
+      path: Sotto/Info.plist
+      properties:
+        CFBundleDisplayName: Sotto
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [audio, bluetooth-central, bluetooth-peripheral]
+        NSMicrophoneUsageDescription: Sotto sends your voice from your AirPods to the person you are talking with. Nothing is recorded or stored.
+        NSBluetoothAlwaysUsageDescription: Sotto uses Bluetooth to connect directly to your conversation partner's iPhone when Wi-Fi is off.
+        NSLocalNetworkUsageDescription: Sotto connects directly to your conversation partner's iPhone nearby. No internet is used.
+        NSSpeechRecognitionUsageDescription: Sotto can show live captions of what your partner says, processed on this iPhone only.
+        WiFiAwareServices:
+          _sotto._udp:
+            Publishable: {}
+            Subscribable: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: uk.org.shadowtech.sotto
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+  SottoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Sotto/UITests]
+    dependencies:
+      - target: Sotto
+schemes:
+  Sotto:
+    build:
+      targets:
+        Sotto: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [SottoUITests]

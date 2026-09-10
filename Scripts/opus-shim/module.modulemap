@@ -1,0 +1,7 @@
+module Copus {
+    header "opus/opus.h"
+    header "opus/opus_defines.h"
+    header "opus/opus_types.h"
+    header "sotto_opus_shim.h"
+    export *
+}
