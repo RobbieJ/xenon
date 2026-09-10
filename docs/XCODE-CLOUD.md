@@ -62,3 +62,41 @@ When GitHub's runners gain Xcode 27 the advisory iOS job there becomes a second 
 A full archive plus TestFlight upload for this app should take a few minutes on Xcode Cloud. At a
 handful of builds a day that is well inside the 25 free hours. Add tests on simulators sparingly,
 they are the slow part.
+
+## Letting Claude drive Xcode Cloud
+
+Xcode Cloud has no chat integration of its own. Two things give a Claude Code session the loop
+it needs.
+
+**1. Build results on the pull request (no setup).** Once the workflow is connected to the
+GitHub repository, Xcode Cloud posts each build's result as a check on the commit. A Claude Code
+session subscribed to the pull request sees those checks as CI events, exactly like the GitHub
+Actions jobs, so it knows when a build failed. It cannot read the logs this way.
+
+**2. The App Store Connect API (ten minutes).** This is what lets Claude start a build, wait for
+it, read the compiler issues and download the logs and test results.
+
+1. App Store Connect › Users and Access › Integrations › App Store Connect API › Team Keys ›
+   Generate. Name it "Claude Code", role **Developer** (enough for Xcode Cloud; use App Manager
+   only if you also want it to manage TestFlight testers). Download the `.p8` once; Apple never
+   shows it again. Note the Key ID and the Issuer ID.
+2. In the Claude Code environment settings for this repository (claude.ai › Code › Environments ›
+   this environment), add three environment variables: `ASC_KEY_ID`, `ASC_ISSUER_ID`, and
+   `ASC_PRIVATE_KEY` containing the full contents of the `.p8` file. Treat them as secrets.
+   Add `api.appstoreconnect.apple.com` to the environment's allowed network hosts if the network
+   policy is restrictive.
+3. That is all. In a session, Claude runs `Scripts/xcode-cloud.py`, which mints the short-lived
+   JWT the API needs and exposes the useful calls:
+
+   ```bash
+   pip install pyjwt cryptography requests
+   Scripts/xcode-cloud.py products                     # find the product id
+   Scripts/xcode-cloud.py workflows <product-id>       # find the workflow id
+   Scripts/xcode-cloud.py start <workflow-id> <branch> # kick off a build, prints the run id
+   Scripts/xcode-cloud.py wait <run-id>                # poll until complete, exit 1 on failure
+   Scripts/xcode-cloud.py issues <run-id>              # compiler errors and warnings with file:line
+   Scripts/xcode-cloud.py artifacts <run-id> --download ./xc-logs
+   ```
+
+The key can be revoked at any time from the same App Store Connect page. Never commit it; the
+script only reads it from the environment.
