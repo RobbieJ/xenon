@@ -17,12 +17,12 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
     public let kind: LinkKind = .wifiAware
     public let events: AsyncStream<LinkEvent>
     private let continuation: AsyncStream<LinkEvent>.Continuation
-    private let connection: NetworkConnection
+    private let connection: NetworkConnection<UDP>
     private let lock = NSLock()
     private var isOpen = true
     private var receiveTask: Task<Void, Never>?
 
-    public init(connection: NetworkConnection) {
+    public init(connection: NetworkConnection<UDP>) {
         self.connection = connection
         let (stream, cont) = AsyncStream<LinkEvent>.makeStream(bufferingPolicy: .unbounded)
         self.events = stream
@@ -79,20 +79,18 @@ public enum WiFiAwareService {
         WACapabilities.supportedFeatures.contains(.wifiAware)
     }
 
-    public static func parameters() -> NetworkParameters {
-        NetworkParameters {
-            UDP()
-        }
-        .wifiAware { $0.performanceMode = .realtime }
-        .serviceClass(.interactiveVoice)
-    }
-
     /// Listen for already-paired devices connecting to us. Yields one link per accepted connection.
     public static func listen() throws -> AsyncThrowingStream<WiFiAwareLink, any Error> {
         guard let service = WAPublishableService.allServices[serviceName] else {
             throw LinkError.unsupported("Info.plist has no publishable \(serviceName)")
         }
-        let listener = try NetworkListener(for: .wifiAware(.connecting(to: .allPairedDevices, from: service)), using: parameters())
+        // Parameters are written inline so the type is inferred from NetworkListener; both sides must use the same performance mode.
+        let listener = try NetworkListener(
+            for: .wifiAware(.connecting(to: .allPairedDevices, from: service)),
+            using: .parameters { UDP() }
+                .wifiAware { $0.performanceMode = .realtime }
+                .serviceClass(.interactiveVoice)
+        )
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -118,7 +116,12 @@ public enum WiFiAwareService {
             if let first = endpoints.first { return .finish(first) }
             return .continue
         }
-        let connection = NetworkConnection(to: endpoint, using: parameters())
+        let connection = NetworkConnection(
+            to: endpoint,
+            using: .parameters { UDP() }
+                .wifiAware { $0.performanceMode = .realtime }
+                .serviceClass(.interactiveVoice)
+        )
         return WiFiAwareLink(connection: connection)
     }
 }
