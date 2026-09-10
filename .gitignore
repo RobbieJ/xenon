@@ -1,20 +1,34 @@
-# OS X FS metadata
+# macOS
 .DS_Store
-# vim backups of files that are open at time of commit
-*.swp
-.settings/*
-/bin
-target
-.classpath
-.project
-.idea
-.settings
-*.iml
-*/tmp
-tmp/
-*.git.properties
-*.espressostorage
 
-# maven-release-plugin artifacts
-/release.properties
-pom.xml.releaseBackup
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved.bak
+
+# Fastlane / CI
+fastlane/report.xml
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Editors
+.idea/
+*.swp
+.vscode/
+
+# Scratch
+tmp/
