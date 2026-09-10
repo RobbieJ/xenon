@@ -124,6 +124,8 @@ None of these has an API. Show once at first session, and again if the route loo
 
 ITU-T G.114 calls under 150 ms transparent and up to 400 ms acceptable. Our typical case is a good phone call, not a face-to-face conversation. The two AirPods hops are outside our control and are the first thing to measure.
 
+**Why FaceTime feels natural at the same numbers.** A FaceTime audio call with AirPods on both ends goes through exactly the same two AirPods hops we do, plus 30 to 100 ms of internet in the middle, so its mouth-to-ear delay is if anything higher than ours. Two things hide it. First, turn-taking tolerates 200 ms: people only notice delay as occasional talk-overs, which is what G.114's "acceptable" band means. Second, and this is the part specific to us, a FaceTime listener has no reference copy of the voice. Our listener is sitting across the table, so the direct acoustic voice leaks through the ear tips and arrives first, and the delayed copy from the app arrives a fifth of a second later. That double arrival, not the absolute delay, is what would read as "lag". It matters least in exactly the places we target: in a loud restaurant or cabin the direct voice is masked by the noise and ANC, and the app's copy is the only intelligible one. It matters most in a quiet room, where the app has no reason to exist. So the phase 0 gate is really two measurements: absolute delay, and how audible the direct path is at typical restaurant and cabin noise levels with ANC on.
+
 **Gate for phase 0:** measured typical mouth-to-ear latency on AirPods Pro 2, Pro 3 and AirPods 4 ANC ≤ 250 ms, and 95th percentile ≤ 350 ms, over Wi-Fi Aware. If we miss it, see §8.
 
 ## 6. Roadmap
