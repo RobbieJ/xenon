@@ -47,7 +47,21 @@ jobs:
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
+      - name: Print SDK interfaces we depend on
+        # The iOS SDK's Swift interfaces are the ground truth for the Wi-Fi Aware and Network
+        # APIs; printing the declarations here lets the log answer API questions without a Mac.
+        run: |
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          for fw in WiFiAware DeviceDiscoveryUI; do
+            f=$(find "$SDK/System/Library/Frameworks/$fw.framework" -name 'arm64*.swiftinterface' | head -1)
+            echo "=== $fw ($f)"
+            grep -E '^(public|@available|extension|  public|    public)' "$f" | grep -v '^@available' | head -400
+          done
+          f=$(find "$SDK/System/Library/Frameworks/Network.framework" -name 'arm64*.swiftinterface' | head -1)
+          echo "=== Network (subset)"
+          grep -nE 'class NetworkConnection|class NetworkListener|class NetworkBrowser|struct NetworkParameters|func run\(|func send\(|var messages|func waitUntilReady|var currentPath|func close|func cancel|static func parameters|func wifiAware|func serviceClass|enum .*Devices|connecting\(' "$f" | head -120
       - name: Build for device without signing
         run: |
+          set -o pipefail
           xcodebuild -project Sotto.xcodeproj -scheme Sotto -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" build | tail -50
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" build 2>&1 | grep -E 'error:|warning: unused|BUILD (SUCCEEDED|FAILED)|\*\*' 

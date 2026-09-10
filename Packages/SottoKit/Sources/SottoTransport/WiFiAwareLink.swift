@@ -37,7 +37,7 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
             for try await (content, _) in connection.messages {
                 guard let packet = Packet.decode(datagram: Array(content)) else { continue }
                 continuation.yield(.received(packet))
-                if let perf = connection.currentPath?.wifiAware?.performance {
+                if let perf = try await connection.currentPath?.wifiAware?.performance {
                     continuation.yield(.qualityChanged(LinkQuality(signalStrength: Double(perf.signalStrength) / 100.0, estimatedLatencyMilliseconds: nil, throughputBitsPerSecond: nil)))
                 }
             }
@@ -58,7 +58,9 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
 
     public func close() async {
         finish(.local)
-        connection.cancel()
+        // NetworkConnection has no explicit cancel in the structured API; ending the receive task
+        // releases the connection.
+        receiveTask?.cancel()
     }
 
     private func finish(_ reason: LinkCloseReason) {
@@ -86,7 +88,7 @@ public enum WiFiAwareService {
         }
         // Parameters are written inline so the type is inferred from NetworkListener; both sides must use the same performance mode.
         let listener = try NetworkListener(
-            for: .wifiAware(.connecting(to: .allPairedDevices, from: service)),
+            for: .wifiAware(.connecting(to: service, from: .allPairedDevices)),
             using: .parameters { UDP() }
                 .wifiAware { $0.performanceMode = .realtime }
                 .serviceClass(.interactiveVoice)
@@ -111,7 +113,7 @@ public enum WiFiAwareService {
         guard let service = WASubscribableService.allServices[serviceName] else {
             throw LinkError.unsupported("Info.plist has no subscribable \(serviceName)")
         }
-        let browser = NetworkBrowser(for: .wifiAware(.connecting(to: .allPairedDevices, from: service)))
+        let browser = NetworkBrowser(for: .wifiAware(.connecting(to: service, from: .allPairedDevices)))
         let endpoint = try await browser.run { endpoints in
             if let first = endpoints.first { return .finish(first) }
             return .continue
