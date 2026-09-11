@@ -1,7 +1,9 @@
 import Foundation
 import SottoCore
 #if canImport(LiveCommunicationKit)
-import LiveCommunicationKit
+// ConversationManager and ConversationAction are not Sendable in the iOS 26.5 SDK; the framework
+// is used only from the main actor here, so its Sendable diagnostics are downgraded.
+@preconcurrency import LiveCommunicationKit
 import AVFAudio
 
 /// Presents the conversation to the system as a call through LiveCommunicationKit (ADR-0005):
@@ -95,22 +97,23 @@ final class CallController: NSObject, ConversationManagerDelegate {
     }
 
     nonisolated func conversationManager(_ manager: ConversationManager, perform action: ConversationAction) {
-        Task { @MainActor in
-            switch action {
-            case let start as StartConversationAction:
-                start.fulfill(dateStarted: Date())
-            case let join as JoinConversationAction:
-                onIncomingAnswered?()
-                join.fulfill(dateConnected: Date())
-            case let end as EndConversationAction:
-                onEndRequested?()
-                end.fulfill(dateEnded: Date())
-            case let mute as MuteConversationAction:
-                onMuteRequested?(mute.isMuted)
-                mute.fulfill()
-            default:
-                action.fulfill()
-            }
+        // Fulfil synchronously on the delegate's context (the action is not Sendable), then notify
+        // the main actor with plain values only.
+        switch action {
+        case let start as StartConversationAction:
+            start.fulfill(dateStarted: Date())
+        case let join as JoinConversationAction:
+            join.fulfill(dateConnected: Date())
+            Task { @MainActor in self.onIncomingAnswered?() }
+        case let end as EndConversationAction:
+            end.fulfill(dateEnded: Date())
+            Task { @MainActor in self.onEndRequested?() }
+        case let mute as MuteConversationAction:
+            let muted = mute.isMuted
+            mute.fulfill()
+            Task { @MainActor in self.onMuteRequested?(muted) }
+        default:
+            action.fulfill()
         }
     }
 
