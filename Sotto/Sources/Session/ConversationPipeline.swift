@@ -9,6 +9,7 @@ import SottoSession
 /// pull-based playout. All the real-time logic lives in `SottoSession` so it is unit-tested.
 final class ConversationPipeline: @unchecked Sendable {
     enum Event: Sendable {
+        case partnerHello(displayName: String, deviceIdentifier: String)
         case partnerTalking(Bool)
         case localLevel(Double)
         case quality(LinkQuality)
@@ -51,7 +52,8 @@ final class ConversationPipeline: @unchecked Sendable {
             case .linkClosed: onEvent?(.linkClosed)
             case .partnerBye: onEvent?(.partnerBye)
             case .error(let e): onEvent?(.error(e))
-            case .partnerHello, .partnerMuted: break
+            case .partnerHello(let h): onEvent?(.partnerHello(displayName: h.displayName, deviceIdentifier: h.deviceIdentifier))
+            case .partnerMuted: break
             }
         }
         try session.start()

@@ -30,8 +30,10 @@ struct RootView: View {
 struct HomeView: View {
     @Environment(SessionCoordinator.self) private var session
     @State private var impaired = false
+    @State private var showPairOptions = false
 
     var body: some View {
+        @Bindable var session = session
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "airpods.pro")
@@ -46,7 +48,41 @@ struct HomeView: View {
             if let err = session.lastError {
                 Text(err).font(.footnote).foregroundStyle(.red)
             }
+            if !session.partners.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Partners").font(.footnote).foregroundStyle(.secondary)
+                    ForEach(session.partners) { p in
+                        HStack {
+                            Text(p.displayName)
+                            Spacer()
+                            Button("Forget", role: .destructive) { session.forget(p) }.font(.footnote)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
             Spacer()
+            #if canImport(WiFiAware)
+            Button {
+                session.reset()
+                session.talk()
+            } label: {
+                Label("Talk", systemImage: "phone.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(session.partners.isEmpty || !session.isWiFiAwareSupported)
+            Button("Pair with a partner") { showPairOptions = true }
+                .disabled(!session.isWiFiAwareSupported)
+                .confirmationDialog("Only one of you needs to show a code.", isPresented: $showPairOptions, titleVisibility: .visible) {
+                    Button("Show a code") { session.reset(); session.pairAsHost() }
+                    Button("Enter a code") { session.reset(); session.pairAsGuest() }
+                }
+            if !session.isWiFiAwareSupported {
+                Text("This iPhone does not support Wi-Fi Aware. Bluetooth pairing arrives in a later build.")
+                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            #endif
             Toggle("Simulate a poor link", isOn: $impaired)
                 .padding(.horizontal)
             Button {
@@ -63,16 +99,23 @@ struct HomeView: View {
                 Label("Start self-test (loopback)", systemImage: "waveform")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            Button("Pair with a partner") {}
-                .disabled(true)
-            Text("Partner pairing arrives in phase 2 (Wi-Fi Aware and Bluetooth).")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            .buttonStyle(.bordered)
         }
         .padding()
+        #if canImport(WiFiAware)
+        .sheet(item: $session.pairingSheet) { sheet in
+            NavigationStack {
+                Group {
+                    switch sheet {
+                    case .host: PairingHostView { session.lastError = $0 }
+                    case .guest: PairingPickerView(onPicked: { session.guestPicked($0) }, onError: { session.lastError = $0 })
+                    }
+                }
+                .navigationTitle(sheet == .host ? "Show this code" : "Enter their code")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { session.cancelPairing() } } }
+            }
+        }
+        #endif
     }
 
     private func label(for reason: SessionEndReason) -> String {

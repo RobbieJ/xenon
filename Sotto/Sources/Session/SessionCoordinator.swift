@@ -4,6 +4,16 @@ import SottoCore
 import SottoAudio
 import SottoTransport
 import SottoSession
+#if canImport(WiFiAware)
+import Network
+import WiFiAware
+#endif
+
+/// Which system pairing sheet is up.
+enum PairingSheet: String, Identifiable {
+    case host, guest
+    var id: String { rawValue }
+}
 
 /// Wires the pieces together for one conversation: audio engine → codec → link → jitter buffer → audio engine,
 /// plus the control channel and the session state machine. UI observes this object.
@@ -20,9 +30,13 @@ final class SessionCoordinator {
     private(set) var linkQuality = LinkQuality()
     private(set) var jitterStatistics = JitterBuffer.Statistics()
     private(set) var routeSummary = ""
-    private(set) var lastError: String?
+    var lastError: String?
+    /// Remembered partners, most recent first. Persisted in UserDefaults.
+    private(set) var partners: [Partner] = []
+    var pairingSheet: PairingSheet?
     let displayName: String
     let deviceIdentifier: String
+    private var linkTask: Task<Void, Never>?
 
     private var pipeline: ConversationPipeline?
     private var loopbackPair: LoopbackLinkPair?
@@ -31,8 +45,17 @@ final class SessionCoordinator {
     #endif
 
     init() {
-        displayName = ProcessInfo.processInfo.hostName
-        deviceIdentifier = UUID().uuidString
+        let defaults = UserDefaults.standard
+        displayName = defaults.string(forKey: "displayName") ?? ProcessInfo.processInfo.hostName
+        if let id = defaults.string(forKey: "deviceIdentifier") {
+            deviceIdentifier = id
+        } else {
+            deviceIdentifier = UUID().uuidString
+            defaults.set(deviceIdentifier, forKey: "deviceIdentifier")
+        }
+        if let data = defaults.data(forKey: "partners"), let saved = try? JSONDecoder().decode([Partner].self, from: data) {
+            partners = saved
+        }
         #if canImport(LiveCommunicationKit)
         call.onEndRequested = { [weak self] in self?.end(fromSystem: true) }
         call.onMuteRequested = { [weak self] muted in
@@ -107,6 +130,10 @@ final class SessionCoordinator {
 
     private func handle(_ event: ConversationPipeline.Event) {
         switch event {
+        case .partnerHello(let name, let id):
+            remember(Partner(id: id, displayName: name, lastSeen: Date()))
+            if case .connected(_, let kind) = state { state = .connected(Partner(id: id, displayName: name, lastSeen: Date()), over: kind) }
+            if case .connecting(_, let kind) = state { state = .connecting(Partner(id: id, displayName: name, lastSeen: Date()), over: kind) }
         case .partnerTalking(let t): partnerIsTalking = t
         case .localLevel(let l): localLevelDBFS = l
         case .quality(let q): linkQuality = q
@@ -122,6 +149,106 @@ final class SessionCoordinator {
         }
     }
 
+    func remember(_ partner: Partner) {
+        partners.removeAll { $0.id == partner.id }
+        partners.insert(partner, at: 0)
+        if let data = try? JSONEncoder().encode(partners) { UserDefaults.standard.set(data, forKey: "partners") }
+    }
+
+    func forget(_ partner: Partner) {
+        partners.removeAll { $0.id == partner.id }
+        if let data = try? JSONEncoder().encode(partners) { UserDefaults.standard.set(data, forKey: "partners") }
+    }
+
+    #if canImport(WiFiAware)
+    var isWiFiAwareSupported: Bool { WiFiAwareService.isSupported }
+
+    /// "Show a code": publish and wait for the newly paired phone to connect.
+    func pairAsHost() {
+        apply(.start)
+        apply(.pairRequested)
+        apply(.roleResolved(.publisher))
+        pairingSheet = .host
+        linkTask?.cancel()
+        linkTask = Task { [weak self] in
+            do {
+                for try await link in try WiFiAwareService.listen() {
+                    await MainActor.run {
+                        self?.pairingSheet = nil
+                        self?.begin(link: link, kind: .wifiAware)
+                    }
+                    return
+                }
+            } catch {
+                await MainActor.run { self?.fail(error) }
+            }
+        }
+    }
+
+    /// "Enter a code": the system picker returns the host's endpoint once the PIN is confirmed.
+    func pairAsGuest() {
+        apply(.start)
+        apply(.pairRequested)
+        apply(.roleResolved(.subscriber))
+        pairingSheet = .guest
+    }
+
+    func guestPicked(_ endpoint: NWEndpoint) {
+        pairingSheet = nil
+        do {
+            begin(link: try WiFiAwareService.connect(to: endpoint), kind: .wifiAware)
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// Repeat use: listen and browse at the same time; the first link to form wins.
+    /// If both phones tap Talk at once each may briefly hold two links; the later one is closed.
+    func talk() {
+        apply(.start)
+        linkTask?.cancel()
+        linkTask = Task { [weak self] in
+            await withTaskGroup(of: (any Link)?.self) { group in
+                group.addTask {
+                    do {
+                        for try await link in try WiFiAwareService.listen() { return link }
+                    } catch {}
+                    return nil
+                }
+                group.addTask {
+                    try? await WiFiAwareService.connectToFirstPairedDevice()
+                }
+                for await candidate in group {
+                    if let link = candidate {
+                        group.cancelAll()
+                        await MainActor.run { self?.begin(link: link, kind: .wifiAware) }
+                        return
+                    }
+                }
+                await MainActor.run { self?.fail(LinkError.unsupported("No partner in range")) }
+            }
+        }
+    }
+
+    func cancelPairing() {
+        pairingSheet = nil
+        linkTask?.cancel()
+        linkTask = nil
+        apply(.reset)
+    }
+
+    private func begin(link: any Link, kind: LinkKind) {
+        let placeholder = partners.first ?? Partner(id: "pending", displayName: "Partner")
+        apply(.linkEstablished(placeholder, kind))
+        start(link: link, partner: placeholder, codec: .wifiAware)
+    }
+
+    private func fail(_ error: any Error) {
+        lastError = String(describing: error)
+        apply(.failure(lastError ?? "failed"))
+    }
+    #endif
+
     func toggleMute() {
         isMuted.toggle()
         pipeline?.setMuted(isMuted)
@@ -134,6 +261,8 @@ final class SessionCoordinator {
         pipeline?.stop()
         pipeline = nil
         loopbackPair = nil
+        linkTask?.cancel()
+        linkTask = nil
         #if canImport(LiveCommunicationKit)
         if !fromSystem { Task { await call.end() } }
         #endif
