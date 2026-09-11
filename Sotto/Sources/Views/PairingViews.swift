@@ -46,7 +46,8 @@ struct PairingPickerView: UIViewControllerRepresentable {
                 onError("Wi-Fi Aware pairing is not supported on this iPhone.")
                 return UIViewController()
             }
-            picker.setDevicePickerCompletionHandler { endpoint, error in
+            // Objective-C `setDevicePickerCompletionHandler:` is imported into Swift as `setDevicePicker(_:)`.
+            picker.setDevicePicker { endpoint, error in
                 if let endpoint { onPicked(endpoint) } else if let error { onError(String(describing: error)) }
             }
             return picker
