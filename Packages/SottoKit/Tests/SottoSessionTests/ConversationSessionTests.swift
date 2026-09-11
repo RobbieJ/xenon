@@ -75,6 +75,15 @@ private func makeOptions(clock: VirtualClock) -> ConversationSession.Options {
         // After prefill (2 frames) every pulled frame is real audio, so the tail must not be silent.
         let energy = received.suffix(40).map { LevelMeter.rmsDBFS($0) }
         #expect(energy.allSatisfy { $0 > -40 })
+
+        // Traces: the sender saw capture/encode/send, the receiver saw arrival/playout, in order.
+        let sent = a.traces
+        #expect(sent.count == 60)
+        #expect(sent.allSatisfy { $0.capturedAt <= $0.encodedAt && $0.encodedAt <= $0.sentAt })
+        let got = b.traces.filter { $0.playedAt > 0 }
+        #expect(got.count >= 55)
+        #expect(got.allSatisfy { $0.receivedAt <= $0.playedAt })
+        #expect(b.traceCSV.hasPrefix("sequence,captured_ns"))
         a.stop(); b.stop()
     }
 

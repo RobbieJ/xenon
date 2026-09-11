@@ -3,6 +3,7 @@ import SottoCore
 
 struct ConversationView: View {
     @Environment(SessionCoordinator.self) private var session
+    @State private var traceURL: URL?
 
     var body: some View {
         VStack(spacing: 28) {
@@ -37,6 +38,16 @@ struct ConversationView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+            }
+            // Phase 0 measurement export. Stays in the developer builds only (see UX-SPEC §4, Settings).
+            if let traceURL {
+                ShareLink(item: traceURL) {
+                    Label("Share measurement CSV", systemImage: "square.and.arrow.up")
+                }
+                .font(.footnote)
+            } else {
+                Button("Prepare measurement CSV") { traceURL = session.exportTrace() }
+                    .font(.footnote)
             }
             Spacer()
             HStack(spacing: 40) {

@@ -99,4 +99,18 @@ final class SessionCoordinator {
         apply(.reset)
         lastError = nil
     }
+
+    /// Writes the current session's packet trace to a temporary CSV and returns its URL for sharing.
+    func exportTrace() -> URL? {
+        guard let pipeline else { return nil }
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sotto-trace-\(stamp).csv")
+        do {
+            try pipeline.traceCSV.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            lastError = "Could not write trace: \(error.localizedDescription)"
+            return nil
+        }
+    }
 }

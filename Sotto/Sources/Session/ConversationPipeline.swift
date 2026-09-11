@@ -77,4 +77,7 @@ final class ConversationPipeline: @unchecked Sendable {
     }
 
     func setMuted(_ m: Bool) { session.setMuted(m) }
+
+    /// Per-packet timestamps for the phase 0 per-hop analysis.
+    var traceCSV: String { session.traceCSV }
 }

@@ -53,6 +53,7 @@ public final class ConversationSession: @unchecked Sendable {
     private var receiveTask: Task<Void, Never>?
     private var pingTask: Task<Void, Never>?
     private var started = false
+    private var trace = TraceLog()
 
     public struct Options: Sendable {
         public var pingInterval: Duration = .seconds(2)
@@ -116,14 +117,19 @@ public final class ConversationSession: @unchecked Sendable {
     }
 
     public var jitterStatistics: JitterBuffer.Statistics { lock.withLock { jitter.statistics } }
+    /// Snapshot of the per-packet trace for export (see PacketTrace).
+    public var traceCSV: String { lock.withLock { trace.csv() } }
+    public var traces: [PacketTrace] { lock.withLock { trace.traces } }
     public var bestRoundTripMilliseconds: Double? { lock.withLock { latency.bestRoundTripMilliseconds } }
 
     /// Pull one frame for playback. Returns silence while prefilling.
     public func nextPlayoutFrame() -> PCMFrame {
         let output: JitterBuffer.Output = lock.withLock { jitter.pop() }
+        let now = options.now()
         let pcm: PCMFrame? = lock.withLock {
             switch output {
-            case .frame(let payload, _, _):
+            case .frame(let payload, let seq, _):
+                trace.update(seq) { $0.playedAt = now }
                 return try? decoder.decode(payload, fec: false)
             case .conceal(let fec):
                 if let fec, codec.inbandFEC, let recovered = try? decoder.decode(fec, fec: true) { return recovered }
@@ -138,6 +144,7 @@ public final class ConversationSession: @unchecked Sendable {
     // MARK: - Capture side
 
     private func captured(_ frame: PCMFrame) {
+        let capturedAt = options.now()
         let (talking, level, muted): (Bool, Double, Bool) = lock.withLock {
             let t = meter.process(frame)
             return (t, meter.lastLevelDBFS, self.muted)
@@ -151,12 +158,18 @@ public final class ConversationSession: @unchecked Sendable {
         let packet: Packet? = lock.withLock {
             guard let bytes = try? encoder.encode(frame) else { return nil }
             let p = Packet(kind: .audio, flags: codec.inbandFEC ? [.fecPresent] : [], sequence: sequence, timestamp: timestamp, payload: bytes)
+            trace.update(sequence) { $0.capturedAt = capturedAt; $0.encodedAt = options.now() }
             sequence &+= 1
             timestamp &+= UInt32(frame.count)
             return p
         }
         guard let packet else { return }
-        Task { [sendLink] in try? await sendLink.send(packet) }
+        Task { [sendLink, weak self] in
+            try? await sendLink.send(packet)
+            guard let self else { return }
+            let t = self.options.now()
+            self.lock.withLock { self.trace.update(packet.header.sequence) { $0.sentAt = t } }
+        }
     }
 
     private func sendControl(_ message: ControlMessage) async {
@@ -178,7 +191,12 @@ public final class ConversationSession: @unchecked Sendable {
                 break
             case .received(let packet):
                 switch packet.header.kind {
-                case .audio: let t = options.now(); lock.withLock { jitter.push(packet, arrivedAt: t) }
+                case .audio:
+                    let t = options.now()
+                    lock.withLock {
+                        jitter.push(packet, arrivedAt: t)
+                        trace.update(packet.header.sequence) { $0.receivedAt = t }
+                    }
                 case .control: await handleControl(packet)
                 }
                 if packet.header.sequence % 50 == 0 { onEvent?(.jitter(jitterStatistics)) }
@@ -202,7 +220,11 @@ public final class ConversationSession: @unchecked Sendable {
             await sendControl(.pong(id: id, sentAt: sentAt, receivedAt: now, repliedAt: options.now()))
         case .pong(let id, let sentAt, let receivedAt, let repliedAt):
             if let sample = LatencySample(id: id, sentAt: sentAt, receivedAt: receivedAt, repliedAt: repliedAt, pongArrivedAt: options.now()) {
-                let rtt: Double? = lock.withLock { latency.add(sample); return latency.bestRoundTripMilliseconds }
+                let rtt: Double? = lock.withLock {
+                    latency.add(sample)
+                    trace.recordClockOffset(latency.medianClockOffsetNanoseconds)
+                    return latency.bestRoundTripMilliseconds
+                }
                 onEvent?(.quality(LinkQuality(estimatedLatencyMilliseconds: rtt.map { $0 / 2 })))
             }
         case .bye: onEvent?(.partnerBye)
