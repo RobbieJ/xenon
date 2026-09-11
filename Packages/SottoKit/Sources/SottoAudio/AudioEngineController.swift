@@ -46,6 +46,12 @@ public final class AudioEngineController: @unchecked Sendable {
         AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: configuration.sampleRate, channels: 1, interleaved: true)!
     }
 
+    /// `AudioSource`-style entry point: sets the capture callback and starts the engine.
+    public func start(onFrame: @escaping @Sendable (PCMFrame) -> Void) throws {
+        onCaptureFrame = onFrame
+        try start()
+    }
+
     public func start() throws {
         guard !isRunning else { return }
         let input = engine.inputNode

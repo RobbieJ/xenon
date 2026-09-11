@@ -23,9 +23,15 @@ var targets: [Target] = [
         dependencies: ["SottoCore"],
         swiftSettings: [.swiftLanguageMode(.v6)]
     ),
+    .target(
+        name: "SottoSession",
+        dependencies: ["SottoCore", "SottoAudio", "SottoTransport"],
+        swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
     .testTarget(name: "SottoCoreTests", dependencies: ["SottoCore"]),
     .testTarget(name: "SottoAudioTests", dependencies: ["SottoAudio", "SottoCore"]),
     .testTarget(name: "SottoTransportTests", dependencies: ["SottoTransport", "SottoCore"]),
+    .testTarget(name: "SottoSessionTests", dependencies: ["SottoSession", "SottoCore", "SottoAudio", "SottoTransport"]),
 ]
 
 if hasOpus {
@@ -39,6 +45,7 @@ let package = Package(
         .library(name: "SottoCore", targets: ["SottoCore"]),
         .library(name: "SottoAudio", targets: ["SottoAudio"]),
         .library(name: "SottoTransport", targets: ["SottoTransport"]),
+        .library(name: "SottoSession", targets: ["SottoSession"]),
     ],
     targets: targets
 )

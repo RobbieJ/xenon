@@ -3,6 +3,7 @@ import Observation
 import SottoCore
 import SottoAudio
 import SottoTransport
+import SottoSession
 
 /// Wires the pieces together for one conversation: audio engine → codec → link → jitter buffer → audio engine,
 /// plus the control channel and the session state machine. UI observes this object.
@@ -55,12 +56,12 @@ final class SessionCoordinator {
     }
 
     private func start(link: any Link, receiveLink: (any Link)? = nil, partner: Partner, codec: CodecConfiguration) {
-        let pipeline = ConversationPipeline(sendLink: link, receiveLink: receiveLink ?? link, codec: codec, hello: .init(displayName: displayName, nonce: PairingRace.makeNonce(), deviceIdentifier: deviceIdentifier))
-        pipeline.onEvent = { [weak self] event in
-            Task { @MainActor in self?.handle(event) }
-        }
-        self.pipeline = pipeline
         do {
+            let pipeline = try ConversationPipeline(sendLink: link, receiveLink: receiveLink ?? link, codec: codec, hello: .init(displayName: displayName, nonce: PairingRace.makeNonce(), deviceIdentifier: deviceIdentifier))
+            pipeline.onEvent = { [weak self] event in
+                Task { @MainActor in self?.handle(event) }
+            }
+            self.pipeline = pipeline
             try pipeline.start()
             apply(.helloCompleted)
         } catch {

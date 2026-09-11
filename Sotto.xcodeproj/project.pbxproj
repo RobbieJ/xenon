@@ -16,6 +16,7 @@
 		8408AB5510A30600817CD11F /* SessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E07B44E91B24D4570DAF1F /* SessionCoordinator.swift */; };
 		90CAEEE8F5AA9772AD6F4FC7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C203C02585BC6B4EE7610171 /* Assets.xcassets */; };
 		AA0E29CA158DBF0F0164B5F4 /* SottoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279796F2F231AD25C695FE61 /* SottoApp.swift */; };
+		B4DC0C040E8D71EE9CF24EFA /* SottoSession in Frameworks */ = {isa = PBXBuildFile; productRef = D148DF1E912D190CE80AED6E /* SottoSession */; };
 		BCBBC7BC797BE7BFD40E3583 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F75F6DC97BEA8BC96FA25D /* RootView.swift */; };
 		D8041B38DD0ED190B1374C88 /* SottoAudio in Frameworks */ = {isa = PBXBuildFile; productRef = BB43EF85D89551925670982C /* SottoAudio */; };
 /* End PBXBuildFile section */
@@ -52,6 +53,7 @@
 				6B0EDF321303B30FEC9139E7 /* SottoCore in Frameworks */,
 				D8041B38DD0ED190B1374C88 /* SottoAudio in Frameworks */,
 				445267B51275C566F8D52123 /* SottoTransport in Frameworks */,
+				B4DC0C040E8D71EE9CF24EFA /* SottoSession in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,6 +187,7 @@
 				FE211BDC2C0A7AAE83ABCB64 /* SottoCore */,
 				BB43EF85D89551925670982C /* SottoAudio */,
 				24E13121EC16932602D506D8 /* SottoTransport */,
+				D148DF1E912D190CE80AED6E /* SottoSession */,
 			);
 			productName = Sotto;
 			productReference = 2A94A254F9B50269EE1EAB8A /* Sotto.app */;
@@ -523,6 +526,10 @@
 		BB43EF85D89551925670982C /* SottoAudio */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SottoAudio;
+		};
+		D148DF1E912D190CE80AED6E /* SottoSession */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SottoSession;
 		};
 		FE211BDC2C0A7AAE83ABCB64 /* SottoCore */ = {
 			isa = XCSwiftPackageProductDependency;

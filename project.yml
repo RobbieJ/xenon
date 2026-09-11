@@ -36,6 +36,8 @@ targets:
         product: SottoAudio
       - package: SottoKit
         product: SottoTransport
+      - package: SottoKit
+        product: SottoSession
     entitlements:
       path: Sotto/Sotto.entitlements
       properties:

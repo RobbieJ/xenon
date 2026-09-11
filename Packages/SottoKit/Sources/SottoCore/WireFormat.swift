@@ -32,7 +32,8 @@ public struct PacketHeader: Sendable, Equatable {
     public var version: UInt8
     public var kind: PacketKind
     public var flags: PacketFlags
-    /// Wraps at 65 535. Increments once per packet regardless of kind.
+    /// Wraps at 65 535. Audio and control packets number themselves independently, so the audio
+    /// sequence has no gaps when a control message is interleaved.
     public var sequence: UInt16
     /// Sample timestamp of the first sample in the payload at the encoder's sample rate. Wraps.
     public var timestamp: UInt32
