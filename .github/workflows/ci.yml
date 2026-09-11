@@ -51,6 +51,7 @@ jobs:
         # The iOS SDK's Swift interfaces are the ground truth for the Wi-Fi Aware, DeviceDiscoveryUI
         # and Network APIs; printing the declarations lets the log answer API questions without a Mac.
         run: |
+          set +e   # this step is informational; a grep with no matches must not fail the job
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "=== DeviceDiscoveryUI (Swift interfaces and ObjC header)"
           for f in $(find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework" -name '*.swiftinterface' | grep arm64e); do echo "--- $f"; grep -nE 'DevicePicker|DevicePairing|func |init' "$f" | head -60 || true; done
