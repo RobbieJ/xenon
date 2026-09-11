@@ -49,6 +49,7 @@ public struct JitterBuffer: Sendable {
         public var duplicates = 0
         public var targetMilliseconds = 0
         public var currentDepthFrames = 0
+        public init() {}
     }
 
     private struct Entry { let payload: [UInt8]; let flags: PacketFlags }

@@ -26,10 +26,21 @@ final class SessionCoordinator {
 
     private var pipeline: ConversationPipeline?
     private var loopbackPair: LoopbackLinkPair?
+    #if canImport(LiveCommunicationKit)
+    private let call = CallController()
+    #endif
 
     init() {
         displayName = ProcessInfo.processInfo.hostName
         deviceIdentifier = UUID().uuidString
+        #if canImport(LiveCommunicationKit)
+        call.onEndRequested = { [weak self] in self?.end(fromSystem: true) }
+        call.onMuteRequested = { [weak self] muted in
+            guard let self, self.isMuted != muted else { return }
+            self.isMuted = muted
+            self.pipeline?.setMuted(muted)
+        }
+        #endif
     }
 
     func apply(_ event: SessionEvent) {
@@ -62,8 +73,32 @@ final class SessionCoordinator {
                 Task { @MainActor in self?.handle(event) }
             }
             self.pipeline = pipeline
+            #if canImport(LiveCommunicationKit)
+            // Present as a system call; the engine starts when the system activates the audio session.
+            call.onAudioSessionActivated = { [weak self] in
+                guard let self, let pipeline = self.pipeline else { return }
+                do {
+                    try pipeline.start()
+                    self.call.reportConnected()
+                    self.apply(.helloCompleted)
+                } catch {
+                    self.lastError = String(describing: error)
+                    self.apply(.failure(self.lastError ?? "start failed"))
+                }
+            }
+            Task {
+                do {
+                    try await call.startOutgoing(to: partner)
+                } catch {
+                    // LiveCommunicationKit unavailable (e.g. region): fall back to a plain audio session.
+                    lastError = "Call UI unavailable: \(error.localizedDescription)"
+                    do { try pipeline.start(); apply(.helloCompleted) } catch { apply(.failure(String(describing: error))) }
+                }
+            }
+            #else
             try pipeline.start()
             apply(.helloCompleted)
+            #endif
         } catch {
             lastError = String(describing: error)
             apply(.failure(lastError ?? "start failed"))
@@ -78,7 +113,11 @@ final class SessionCoordinator {
         case .jitter(let s): jitterStatistics = s
         case .route(let r): routeSummary = r
         case .linkClosed: apply(.linkDropped)
-        case .partnerBye: apply(.partnerSaidBye)
+        case .partnerBye:
+            #if canImport(LiveCommunicationKit)
+            call.reportRemoteEnded()
+            #endif
+            apply(.partnerSaidBye)
         case .error(let e): lastError = e
         }
     }
@@ -86,12 +125,18 @@ final class SessionCoordinator {
     func toggleMute() {
         isMuted.toggle()
         pipeline?.setMuted(isMuted)
+        #if canImport(LiveCommunicationKit)
+        Task { await call.setMuted(isMuted) }
+        #endif
     }
 
-    func end() {
+    func end(fromSystem: Bool = false) {
         pipeline?.stop()
         pipeline = nil
         loopbackPair = nil
+        #if canImport(LiveCommunicationKit)
+        if !fromSystem { Task { await call.end() } }
+        #endif
         apply(.userEnded)
     }
 
