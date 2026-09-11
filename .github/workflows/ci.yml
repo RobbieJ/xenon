@@ -52,15 +52,13 @@ jobs:
         # and Network APIs; printing the declarations lets the log answer API questions without a Mac.
         run: |
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          f=$(find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework" -name 'arm64*.swiftinterface' | head -1)
-          echo "=== DeviceDiscoveryUI"
-          grep -nE 'DevicePicker|DevicePairingView|public init|public func|public static' "$f" | head -80
-          f=$(find "$SDK/System/Library/Frameworks/Network.framework" -name 'arm64*.swiftinterface' | head -1)
-          echo "=== Network (subset)"
-          grep -nE 'struct Message|var content|var metadata|func receive|func send<|func send\(_ content|class NetworkConnection|var currentPath|struct UDP' "$f" | head -60
-          f=$(find "$SDK/System/Library/Frameworks/LiveCommunicationKit.framework" -name 'arm64*.swiftinterface' | head -1)
-          echo "=== LiveCommunicationKit"
-          grep -nE '^public|^  public|^    public' "$f" | grep -vE 'encode\(|init\(from decoder|hashValue|func hash|static func ==' | head -220
+          echo "=== DeviceDiscoveryUI (Swift interfaces and ObjC header)"
+          for f in $(find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework" -name '*.swiftinterface' | grep arm64e); do echo "--- $f"; grep -nE 'DevicePicker|DevicePairing|func |init' "$f" | head -60; done
+          find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework/Headers" -name '*.h' | while read h; do echo "--- $h"; grep -nE '^@interface|^- \(|^\+ \(|^@property|typedef' "$h"; done
+          ls "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework/Modules" 2>/dev/null
+          f=$(find "$SDK/System/Library/Frameworks/LiveCommunicationKit.framework" -name 'arm64e*.swiftinterface' | head -1)
+          echo "=== LiveCommunicationKit (manager, delegate, events)"
+          grep -nE 'class ConversationManager|protocol ConversationManagerDelegate|func conversationManager|func report|func perform|var delegate|case |AudioSession|class Conversation |struct StartConversationAction|struct JoinConversationAction|struct EndConversationAction|struct MuteConversationAction|struct ConversationAction|protocol ConversationAction|fulfill|fail' "$f" | head -160
       - name: Build for device without signing
         run: |
           set -o pipefail

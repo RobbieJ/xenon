@@ -128,11 +128,14 @@ public enum WiFiAwareService {
         let browser = NetworkBrowser(for: .wifiAware(.connecting(to: .allPairedDevices, from: service)))
         let found = EndpointBox()
         do {
+            // NetworkBrowser has no cancel; throwing from the handler ends the browse.
             try await browser.run { endpoints in
                 if let first = endpoints.first, found.set(first) {
-                    browser.cancel()
+                    throw BrowseFinished()
                 }
             }
+        } catch is BrowseFinished {
+            // expected
         } catch {
             if found.value == nil { throw error }
         }
@@ -145,6 +148,8 @@ public enum WiFiAwareService {
         )
         return WiFiAwareLink(connection: connection)
     }
+
+    private struct BrowseFinished: Error {}
 
     private final class EndpointBox: @unchecked Sendable {
         private let lock = NSLock()
