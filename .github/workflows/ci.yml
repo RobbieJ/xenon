@@ -33,6 +33,10 @@ jobs:
         run: brew install opus pkgconf
       - name: Test
         working-directory: Packages/SottoKit
+        # The C shim target does not inherit the system library's pkg-config paths; clang honours these.
+        env:
+          CPATH: /opt/homebrew/include
+          LIBRARY_PATH: /opt/homebrew/lib
         run: swift test --parallel
 
   app-ios:
