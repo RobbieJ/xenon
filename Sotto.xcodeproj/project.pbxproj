@@ -9,9 +9,11 @@
 /* Begin PBXBuildFile section */
 		127E89AD7D9A8EAAF445A8FB /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3AABE349EA39A983B5A35F2 /* OnboardingView.swift */; };
 		2F3982E9334F7F10D3482AFE /* SottoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35A12B31EBB5E01BEB661B53 /* SottoUITests.swift */; };
+		403B8413FC06DD4C407EBECA /* PairingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C188CF395C38B3B87AF81F /* PairingViews.swift */; };
 		445267B51275C566F8D52123 /* SottoTransport in Frameworks */ = {isa = PBXBuildFile; productRef = 24E13121EC16932602D506D8 /* SottoTransport */; };
 		4BABD3D8CD4A72034A6C447F /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D2D9D63E58AEC89D0780CC /* ConversationView.swift */; };
 		5C6AF980FEDBA53BC01C8164 /* ConversationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FF88A0643B23B37D6F3209 /* ConversationPipeline.swift */; };
+		67D763D76183A2B4C5A88CB7 /* CallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5652566A33B61BC61DF1CBD8 /* CallController.swift */; };
 		6B0EDF321303B30FEC9139E7 /* SottoCore in Frameworks */ = {isa = PBXBuildFile; productRef = FE211BDC2C0A7AAE83ABCB64 /* SottoCore */; };
 		8408AB5510A30600817CD11F /* SessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E07B44E91B24D4570DAF1F /* SessionCoordinator.swift */; };
 		90CAEEE8F5AA9772AD6F4FC7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C203C02585BC6B4EE7610171 /* Assets.xcassets */; };
@@ -37,7 +39,9 @@
 		2A94A254F9B50269EE1EAB8A /* Sotto.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sotto.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		35A12B31EBB5E01BEB661B53 /* SottoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SottoUITests.swift; sourceTree = "<group>"; };
 		42E07B44E91B24D4570DAF1F /* SessionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinator.swift; sourceTree = "<group>"; };
+		5652566A33B61BC61DF1CBD8 /* CallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallController.swift; sourceTree = "<group>"; };
 		A3AABE349EA39A983B5A35F2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		B0C188CF395C38B3B87AF81F /* PairingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingViews.swift; sourceTree = "<group>"; };
 		B3F75F6DC97BEA8BC96FA25D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C203C02585BC6B4EE7610171 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C366C5A427124180E9599D94 /* SottoUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SottoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,6 +69,7 @@
 			children = (
 				21D2D9D63E58AEC89D0780CC /* ConversationView.swift */,
 				A3AABE349EA39A983B5A35F2 /* OnboardingView.swift */,
+				B0C188CF395C38B3B87AF81F /* PairingViews.swift */,
 				B3F75F6DC97BEA8BC96FA25D /* RootView.swift */,
 			);
 			path = Views;
@@ -82,6 +87,7 @@
 		10DADCDB31BE0F6AA3FFD1F7 /* Session */ = {
 			isa = PBXGroup;
 			children = (
+				5652566A33B61BC61DF1CBD8 /* CallController.swift */,
 				C5FF88A0643B23B37D6F3209 /* ConversationPipeline.swift */,
 				42E07B44E91B24D4570DAF1F /* SessionCoordinator.swift */,
 			);
@@ -203,12 +209,12 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					4AED9085BED1012916510B72 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = RQ73DXU2DG;
 						ProvisioningStyle = Automatic;
 						TestTargetID = FED82104CD54FDCBF3A1311B;
 					};
 					FED82104CD54FDCBF3A1311B = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = RQ73DXU2DG;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -260,9 +266,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				67D763D76183A2B4C5A88CB7 /* CallController.swift in Sources */,
 				5C6AF980FEDBA53BC01C8164 /* ConversationPipeline.swift in Sources */,
 				4BABD3D8CD4A72034A6C447F /* ConversationView.swift in Sources */,
 				127E89AD7D9A8EAAF445A8FB /* OnboardingView.swift in Sources */,
+				403B8413FC06DD4C407EBECA /* PairingViews.swift in Sources */,
 				BCBBC7BC797BE7BFD40E3583 /* RootView.swift in Sources */,
 				8408AB5510A30600817CD11F /* SessionCoordinator.swift in Sources */,
 				AA0E29CA158DBF0F0164B5F4 /* SottoApp.swift in Sources */,
@@ -335,7 +343,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = RQ73DXU2DG;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -413,7 +421,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = RQ73DXU2DG;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
