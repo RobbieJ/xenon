@@ -34,8 +34,8 @@ jobs:
   app-ios:
     name: Sotto app build (iOS, no signing)
     runs-on: macos-26
-    # Needs Xcode 27 for the iOS 27 SDK. Advisory until the runner images carry it.
-    continue-on-error: true
+    # Builds with the newest Xcode on the runner (26.6 at the time of writing, iOS 26.5 SDK)
+    # against the iOS 27 deployment target, which is a warning, not an error. Mandatory.
     steps:
       - uses: actions/checkout@v4
       - name: Select newest Xcode
