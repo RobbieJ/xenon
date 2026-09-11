@@ -22,7 +22,9 @@ cd Packages/SottoKit && swift test
 ```
 
 If the toolchain is missing, download the Swift 6.3 Ubuntu 24.04 tarball from swift.org into
-`/home/user/toolchain`. XcodeGen builds from source on Linux with
+`/home/user/toolchain`. `apt-get install -y libopus-dev pkg-config` makes the package link a real
+libopus (see `Package.swift`), so the Opus tests and the end-to-end session tests run with the
+real codec; without it they fall back to the PCM passthrough. XcodeGen builds from source on Linux with
 `USER=x LOGNAME=x xcodegen generate` (it needs a username set).
 
 ## CI as the compiler for Apple-only code

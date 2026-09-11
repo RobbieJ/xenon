@@ -3,6 +3,9 @@ import SottoCore
 
 #if SOTTO_HAS_OPUS
 import Copus
+#if SOTTO_OPUS_SYSTEM
+import CopusShim   // the ctl shim is a separate C target when linking a system libopus
+#endif
 
 /// libopus wrapper. Requires Vendor/opus.xcframework, built by Scripts/build-opus-xcframework.sh,
 /// which also compiles the tiny C shim that replaces the variadic `opus_encoder_ctl`.
@@ -34,7 +37,7 @@ public final class OpusEncoderBox: VoiceEncoder, @unchecked Sendable {
         }
         let n = frame.withUnsafeBufferPointer { pcm in
             out.withUnsafeMutableBufferPointer { buf in
-                opus_encode(encoder, pcm.baseAddress, Int32(frame.count), buf.baseAddress, Int32(buf.count))
+                opus_encode(encoder, pcm.baseAddress!, Int32(frame.count), buf.baseAddress!, Int32(buf.count))
             }
         }
         guard n > 0 else { throw CodecError.encodeFailed(n) }
@@ -62,10 +65,10 @@ public final class OpusDecoderBox: VoiceDecoder, @unchecked Sendable {
         let n: Int32 = pcm.withUnsafeMutableBufferPointer { buf in
             if let packet {
                 return packet.withUnsafeBufferPointer { p in
-                    opus_decode(decoder, p.baseAddress, Int32(packet.count), buf.baseAddress, Int32(buf.count), fec ? 1 : 0)
+                    opus_decode(decoder, p.baseAddress, Int32(packet.count), buf.baseAddress!, Int32(buf.count), fec ? 1 : 0)
                 }
             } else {
-                return opus_decode(decoder, nil, 0, buf.baseAddress, Int32(buf.count), 0)
+                return opus_decode(decoder, nil, 0, buf.baseAddress!, Int32(buf.count), 0)
             }
         }
         guard n > 0 else { throw CodecError.decodeFailed(n) }

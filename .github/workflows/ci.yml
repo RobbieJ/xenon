@@ -12,6 +12,8 @@ jobs:
     container: swift:6.3
     steps:
       - uses: actions/checkout@v4
+      - name: Install libopus so the codec wrapper is exercised for real
+        run: apt-get update -q && apt-get install -y -q libopus-dev pkg-config
       - name: Test
         working-directory: Packages/SottoKit
         run: swift test --parallel
@@ -27,6 +29,8 @@ jobs:
           echo "Using $XCODE"
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
+      - name: Install libopus so the codec wrapper is exercised for real
+        run: brew install opus
       - name: Test
         working-directory: Packages/SottoKit
         run: swift test --parallel

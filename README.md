@@ -63,7 +63,8 @@ xcodegen generate
 open Sotto.xcodeproj                   # set your team, run on two iPhones
 ```
 
-Package tests anywhere with a Swift 6.3 toolchain:
+Package tests anywhere with a Swift 6.3 toolchain (install libopus first, `brew install opus` or
+`apt install libopus-dev`, so the Opus wrapper is tested for real rather than the PCM stand-in):
 
 ```bash
 cd Packages/SottoKit && swift test
