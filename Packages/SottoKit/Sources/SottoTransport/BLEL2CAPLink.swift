@@ -193,8 +193,10 @@ public final class BLEPeripheralHost: NSObject, CBPeripheralManagerDelegate, @un
 
 /// Central role: scans for the Sotto service, reads the peer's identity and PSM, and opens the
 /// L2CAP channel only when `BLERolePolicy` says this phone is the opener. Peripherals that the
-/// policy assigns the other way, or that are not in `acceptedIdentities` when that set is
-/// non-empty, are released and the scan resumes.
+/// policy assigns the other way are released and the scan resumes. `acceptedIdentities` is an
+/// optional allow-list; the app leaves it empty and confirms unknown partners after the hello
+/// handshake instead, because combining an allow-list with the role policy can deadlock a
+/// first pairing.
 public final class BLECentralClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, @unchecked Sendable {
     private var manager: CBCentralManager!
     private var peripheral: CBPeripheral?

@@ -151,3 +151,66 @@ final class EventLog: @unchecked Sendable {
     func append(_ e: ConversationSession.Event) { lock.withLock { items.append(e) } }
     func contains(_ p: (ConversationSession.Event) -> Bool) -> Bool { lock.withLock { items.contains(where: p) } }
 }
+
+@Suite struct MuteRecoveryTests {
+    @Test func audioResumesAfterUnmute() async throws {
+        let pair = LoopbackLinkPair()
+        let clock = VirtualClock()
+        let srcA = ManualSource(), srcB = ManualSource()
+        let options = makeOptions(clock: clock)
+        let a = try ConversationSession(source: srcA, link: pair.a, codec: .bleL2CAP, hello: .init(displayName: "A", nonce: 1, deviceIdentifier: "A"), options: options)
+        let b = try ConversationSession(source: srcB, link: pair.b, codec: .bleL2CAP, hello: .init(displayName: "B", nonce: 2, deviceIdentifier: "B"), options: options)
+        try a.start(); try b.start()
+        await settle(); await pair.advance(to: 0); await settle()
+        let n = a.codec.samplesPerFrame
+        var tick = 0
+        func step(push: Bool) async -> PCMFrame {
+            if push { srcA.push(tone(tick, samples: n)); await waitForQueued(pair, atLeast: 1) } else { await settle() }
+            tick += 1
+            clock.set(Double(tick) * 20)
+            await pair.advance(to: Double(tick) * 20)
+            await settle()
+            return b.nextPlayoutFrame()
+        }
+        for _ in 0..<20 { _ = await step(push: true) }
+        a.setMuted(true)
+        await settle()
+        for _ in 0..<100 { srcA.push(tone(tick, samples: n)); _ = await step(push: false) }   // muted: frames captured, none sent
+        a.setMuted(false)
+        await settle()
+        var loud = 0
+        for _ in 0..<40 { if LevelMeter.rmsDBFS(await step(push: true)) > -40 { loud += 1 } }
+        #expect(loud >= 30)
+        #expect(b.jitterStatistics.lateDiscarded == 0)
+        a.stop(); b.stop()
+    }
+}
+
+@Suite struct LinkHandshakeTests {
+    @Test func exchangesHellosBothWays() async throws {
+        let pair = LoopbackLinkPair()
+        let helloA = ControlMessage.Hello(displayName: "A", nonce: 1, deviceIdentifier: "idA")
+        let helloB = ControlMessage.Hello(displayName: "B", nonce: 2, deviceIdentifier: "idB")
+        async let ra = LinkHandshake.perform(on: pair.a, local: helloA)
+        async let rb = LinkHandshake.perform(on: pair.b, local: helloB)
+        await settle(); await pair.advance(to: 0); await settle(); await pair.advance(to: 1)
+        let (a, b) = try await (ra, rb)
+        #expect(a.remote == helloB)
+        #expect(b.remote == helloA)
+    }
+    @Test func timesOutWithoutPeer() async {
+        let pair = LoopbackLinkPair()
+        await #expect(throws: LinkHandshake.Failure.timedOut) {
+            try await LinkHandshake.perform(on: pair.a, local: .init(displayName: "A", nonce: 1, deviceIdentifier: "a"), timeout: .milliseconds(50))
+        }
+    }
+    @Test func bothSidesKeepTheSameLink() {
+        // A initiated X (A browser), B accepted X. B initiated Y, A accepted Y.
+        let aKeepsX = LinkHandshake.shouldKeep(localIdentifier: "A", remoteIdentifier: "B", initiatedLocally: true)
+        let bKeepsX = LinkHandshake.shouldKeep(localIdentifier: "B", remoteIdentifier: "A", initiatedLocally: false)
+        let aKeepsY = LinkHandshake.shouldKeep(localIdentifier: "A", remoteIdentifier: "B", initiatedLocally: false)
+        let bKeepsY = LinkHandshake.shouldKeep(localIdentifier: "B", remoteIdentifier: "A", initiatedLocally: true)
+        #expect(aKeepsX && bKeepsX)
+        #expect(!aKeepsY && !bKeepsY)
+    }
+}

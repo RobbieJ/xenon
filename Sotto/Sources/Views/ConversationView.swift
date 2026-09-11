@@ -75,9 +75,9 @@ struct ConversationView: View {
             .padding(.bottom, 24)
         }
         .padding()
-        .alert("New phone connected", isPresented: Binding(get: { session.unknownPartnerName != nil }, set: { if !$0 { session.unknownPartnerName = nil } })) {
-            Button("Keep talking") { session.unknownPartnerName = nil }
-            Button("End", role: .destructive) { session.unknownPartnerName = nil; session.end() }
+        .alert("New phone connected", isPresented: Binding(get: { session.unknownPartnerName != nil }, set: { if !$0 { session.acceptUnknownPartner() } })) {
+            Button("Keep talking") { session.acceptUnknownPartner() }
+            Button("End", role: .destructive) { session.rejectUnknownPartner() }
         } message: {
             Text("\(session.unknownPartnerName ?? "A phone") is not one of your remembered partners.")
         }

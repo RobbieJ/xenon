@@ -43,8 +43,13 @@ final class CallController: NSObject, ConversationManagerDelegate {
         Handle(type: .generic, value: partner.id, displayName: partner.displayName)
     }
 
-    /// We initiated: show the outgoing call UI.
+    /// We initiated: show the outgoing call UI. On a reconnect the existing conversation is kept
+    /// and the audio session is already active, so the activation callback is replayed.
     func startOutgoing(to partner: Partner) async throws {
+        if conversationUUID != nil {
+            onAudioSessionActivated?()
+            return
+        }
         let uuid = UUID()
         conversationUUID = uuid
         try await manager.perform([StartConversationAction(conversationUUID: uuid, handles: [handle(for: partner)], isVideo: false)])

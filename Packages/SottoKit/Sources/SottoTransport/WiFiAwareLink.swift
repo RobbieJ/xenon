@@ -73,6 +73,9 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
         finish(.local)
         receiveTask?.cancel()
         qualityTask?.cancel()
+        // NetworkConnection has no cancel in the structured API; signalling end of stream is the
+        // closest thing to a graceful close for the peer.
+        try? await connection.send(Data(), endOfStream: true)
     }
 
     private func finish(_ reason: LinkCloseReason) {

@@ -154,7 +154,12 @@ public final class ConversationSession: @unchecked Sendable {
             lastTalking = talking
             Task { await sendControl(.talking(talking)) }
         }
-        guard !muted else { return }
+        // Muted: advance the audio clock without sending, so the partner's jitter buffer sees a
+        // gap it can skip over on unmute rather than a stale sequence it discards as late.
+        guard !muted else {
+            lock.withLock { sequence &+= 1; timestamp &+= UInt32(frame.count) }
+            return
+        }
         let packet: Packet? = lock.withLock {
             guard let bytes = try? encoder.encode(frame) else { return nil }
             let p = Packet(kind: .audio, flags: codec.inbandFEC ? [.fecPresent] : [], sequence: sequence, timestamp: timestamp, payload: bytes)
