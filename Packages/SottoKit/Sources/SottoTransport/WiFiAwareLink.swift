@@ -162,3 +162,38 @@ public enum WiFiAwareService {
     }
 }
 #endif
+
+#if canImport(WiFiAware) && canImport(Network) && os(iOS)
+@available(iOS 26.0, *)
+public extension WiFiAwareService {
+    /// Publisher action used while pairing a new partner: publish our service to no devices yet;
+    /// the system pairing sheet adds the newly paired device.
+    static func pairingListenerProvider() throws -> WAPublisherListener {
+        guard let service = WAPublishableService.allServices[serviceName] else {
+            throw LinkError.unsupported("Info.plist has no publishable \(serviceName)")
+        }
+        return .wifiAware(.connecting(to: service, from: .selected([WAPairedDevice]())))
+    }
+
+    /// Browser descriptor for the system device picker when pairing as the subscriber.
+    static func pairingBrowseDescriptor() throws -> NWBrowser.Descriptor {
+        guard let service = WASubscribableService.allServices[serviceName] else {
+            throw LinkError.unsupported("Info.plist has no subscribable \(serviceName)")
+        }
+        let browser: WASubscriberBrowser = .wifiAware(.connecting(to: .selected([WAPairedDevice]()), from: service))
+        return browser.makeDescriptor()
+    }
+
+    /// Connect to an endpoint the system picker returned.
+    static func connect(to endpoint: NWEndpoint) throws -> WiFiAwareLink {
+        guard let wa = endpoint.wifiAware else { throw LinkError.unsupported("Picker returned a non-Wi-Fi Aware endpoint") }
+        let connection = NetworkConnection(
+            to: wa,
+            using: .parameters { UDP() }
+                .wifiAware { $0.performanceMode = .realtime }
+                .serviceClass(.interactiveVoice)
+        )
+        return WiFiAwareLink(connection: connection)
+    }
+}
+#endif
