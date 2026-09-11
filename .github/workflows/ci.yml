@@ -48,18 +48,19 @@ jobs:
       - name: Generate project
         run: xcodegen generate
       - name: Print SDK interfaces we depend on
-        # The iOS SDK's Swift interfaces are the ground truth for the Wi-Fi Aware and Network
-        # APIs; printing the declarations here lets the log answer API questions without a Mac.
+        # The iOS SDK's Swift interfaces are the ground truth for the Wi-Fi Aware, DeviceDiscoveryUI
+        # and Network APIs; printing the declarations lets the log answer API questions without a Mac.
         run: |
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          for fw in WiFiAware DeviceDiscoveryUI; do
-            f=$(find "$SDK/System/Library/Frameworks/$fw.framework" -name 'arm64*.swiftinterface' | head -1)
-            echo "=== $fw ($f)"
-            grep -E '^(public|@available|extension|  public|    public)' "$f" | grep -v '^@available' | head -400
-          done
+          f=$(find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework" -name 'arm64*.swiftinterface' | head -1)
+          echo "=== DeviceDiscoveryUI"
+          grep -nE 'DevicePicker|DevicePairingView|public init|public func|public static' "$f" | head -80
           f=$(find "$SDK/System/Library/Frameworks/Network.framework" -name 'arm64*.swiftinterface' | head -1)
           echo "=== Network (subset)"
-          grep -nE 'class NetworkConnection|class NetworkListener|class NetworkBrowser|struct NetworkParameters|func run\(|func send\(|var messages|func waitUntilReady|var currentPath|func close|func cancel|static func parameters|func wifiAware|func serviceClass|enum .*Devices|connecting\(' "$f" | head -120
+          grep -nE 'struct Message|var content|var metadata|func receive|func send<|func send\(_ content|class NetworkConnection|var currentPath|struct UDP' "$f" | head -60
+          f=$(find "$SDK/System/Library/Frameworks/LiveCommunicationKit.framework" -name 'arm64*.swiftinterface' | head -1)
+          echo "=== LiveCommunicationKit"
+          grep -nE '^public|^  public|^    public' "$f" | grep -vE 'encode\(|init\(from decoder|hashValue|func hash|static func ==' | head -220
       - name: Build for device without signing
         run: |
           set -o pipefail

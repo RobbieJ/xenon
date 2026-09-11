@@ -4,14 +4,15 @@ import Network
 import WiFiAware
 import SottoCore
 
-/// A `Link` over one Wi-Fi Aware `NetworkConnection` (UDP datagrams, one packet per datagram).
+/// A `Link` over one Wi-Fi Aware `NetworkConnection<UDP>` (one packet per datagram).
 ///
-/// The connection is created by `WiFiAwareService` below, or by the app after the user picks a
-/// partner in DeviceDiscoveryUI. Performance mode `.realtime` and service class
-/// `.interactiveVoice` are set on the parameters; both sides must use the same mode.
+/// Signatures below follow the iOS 26.5 SDK's Swift interface (printed by the CI job):
+/// `NetworkListener.run` and `NetworkBrowser.run` take handler closures; the publisher action is
+/// `connecting(to: service, from: devices)` while the subscriber action is
+/// `connecting(to: devices, from: service)`; `WAPerformanceReport.signalStrength` is optional and
+/// `transmitLatency` is keyed by access category.
 ///
-/// DEVICE-ONLY AND NOT YET COMPILED against the iOS 27 SDK in CI: WiFiAware is iOS-only and
-/// GitHub's macOS runners cannot build it. Expect to fix API details in Xcode (phase 2).
+/// Device-only. Compiles in the advisory iOS CI job; not yet run on hardware.
 @available(iOS 26.0, *)
 public final class WiFiAwareLink: Link, @unchecked Sendable {
     public let kind: LinkKind = .wifiAware
@@ -21,29 +22,41 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
     private let lock = NSLock()
     private var isOpen = true
     private var receiveTask: Task<Void, Never>?
+    private var qualityTask: Task<Void, Never>?
 
     public init(connection: NetworkConnection<UDP>) {
         self.connection = connection
         let (stream, cont) = AsyncStream<LinkEvent>.makeStream(bufferingPolicy: .unbounded)
         self.events = stream
         self.continuation = cont
+        continuation.yield(.ready)
         receiveTask = Task { [weak self] in await self?.receiveLoop() }
+        qualityTask = Task { [weak self] in await self?.qualityLoop() }
     }
 
     private func receiveLoop() async {
         do {
-            try await connection.waitUntilReady()
-            continuation.yield(.ready)
-            for try await (content, _) in connection.messages {
-                guard let packet = Packet.decode(datagram: Array(content)) else { continue }
+            for try await message in connection.messages {
+                guard let packet = Packet.decode(datagram: Array(message.content)) else { continue }
                 continuation.yield(.received(packet))
-                if let perf = try await connection.currentPath?.wifiAware?.performance {
-                    continuation.yield(.qualityChanged(LinkQuality(signalStrength: Double(perf.signalStrength) / 100.0, estimatedLatencyMilliseconds: nil, throughputBitsPerSecond: nil)))
-                }
             }
             finish(.remote)
         } catch {
             finish(.lost(String(describing: error)))
+        }
+    }
+
+    /// Samples the Wi-Fi Aware performance report once a second for the field-trial logs.
+    private func qualityLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            guard let report = try? await connection.currentPath?.wifiAware?.performance else { continue }
+            let latency = report.transmitLatency[.interactiveVoice]?.average.map { Double($0.components.seconds) * 1000 + Double($0.components.attoseconds) / 1e15 }
+            continuation.yield(.qualityChanged(LinkQuality(
+                signalStrength: report.signalStrength.map { max(0, min(1, ($0 + 100) / 70)) },
+                estimatedLatencyMilliseconds: latency,
+                throughputBitsPerSecond: report.throughputCapacity.map { Int($0) }
+            )))
         }
     }
 
@@ -58,9 +71,8 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
 
     public func close() async {
         finish(.local)
-        // NetworkConnection has no explicit cancel in the structured API; ending the receive task
-        // releases the connection.
         receiveTask?.cancel()
+        qualityTask?.cancel()
     }
 
     private func finish(_ reason: LinkCloseReason) {
@@ -71,7 +83,7 @@ public final class WiFiAwareLink: Link, @unchecked Sendable {
     }
 }
 
-/// Publisher and subscriber helpers built on the iOS 26 Network framework API.
+/// Publisher and subscriber helpers on the iOS 26 Network framework API.
 /// Service names must match the `WiFiAwareServices` entries in the app's Info.plist.
 @available(iOS 26.0, *)
 public enum WiFiAwareService {
@@ -82,11 +94,11 @@ public enum WiFiAwareService {
     }
 
     /// Listen for already-paired devices connecting to us. Yields one link per accepted connection.
+    /// Cancelling the consuming task stops the listener.
     public static func listen() throws -> AsyncThrowingStream<WiFiAwareLink, any Error> {
         guard let service = WAPublishableService.allServices[serviceName] else {
             throw LinkError.unsupported("Info.plist has no publishable \(serviceName)")
         }
-        // Parameters are written inline so the type is inferred from NetworkListener; both sides must use the same performance mode.
         let listener = try NetworkListener(
             for: .wifiAware(.connecting(to: service, from: .allPairedDevices)),
             using: .parameters { UDP() }
@@ -96,7 +108,7 @@ public enum WiFiAwareService {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    for try await connection in listener.run() {
+                    try await listener.run { connection in
                         continuation.yield(WiFiAwareLink(connection: connection))
                     }
                     continuation.finish()
@@ -113,11 +125,18 @@ public enum WiFiAwareService {
         guard let service = WASubscribableService.allServices[serviceName] else {
             throw LinkError.unsupported("Info.plist has no subscribable \(serviceName)")
         }
-        let browser = NetworkBrowser(for: .wifiAware(.connecting(to: service, from: .allPairedDevices)))
-        let endpoint = try await browser.run { endpoints in
-            if let first = endpoints.first { return .finish(first) }
-            return .continue
+        let browser = NetworkBrowser(for: .wifiAware(.connecting(to: .allPairedDevices, from: service)))
+        let found = EndpointBox()
+        do {
+            try await browser.run { endpoints in
+                if let first = endpoints.first, found.set(first) {
+                    browser.cancel()
+                }
+            }
+        } catch {
+            if found.value == nil { throw error }
         }
+        guard let endpoint = found.value else { throw LinkError.unsupported("No paired device found") }
         let connection = NetworkConnection(
             to: endpoint,
             using: .parameters { UDP() }
@@ -125,6 +144,16 @@ public enum WiFiAwareService {
                 .serviceClass(.interactiveVoice)
         )
         return WiFiAwareLink(connection: connection)
+    }
+
+    private final class EndpointBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: WAEndpoint?
+        var value: WAEndpoint? { lock.withLock { stored } }
+        /// Returns true only for the first successful set.
+        func set(_ e: WAEndpoint) -> Bool {
+            lock.withLock { if stored == nil { stored = e; return true } else { return false } }
+        }
     }
 }
 #endif
