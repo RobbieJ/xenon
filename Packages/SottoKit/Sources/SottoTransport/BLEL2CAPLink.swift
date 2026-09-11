@@ -144,6 +144,12 @@ public final class BLEPeripheralHost: NSObject, CBPeripheralManagerDelegate, @un
         manager = CBPeripheralManager(delegate: self, queue: DispatchQueue(label: "sotto.ble.peripheral"))
     }
 
+    /// Stop being discoverable but keep any channel that is already open alive.
+    public func stopAdvertising() {
+        manager.stopAdvertising()
+    }
+
+    /// Full teardown: also unpublishes the PSM, which closes open channels.
     public func stop() {
         manager.stopAdvertising()
         if psm != 0 { manager.unpublishL2CAPChannel(psm) }
@@ -151,8 +157,13 @@ public final class BLEPeripheralHost: NSObject, CBPeripheralManagerDelegate, @un
     }
 
     public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
-        guard peripheral.state == .poweredOn else { return }
-        peripheral.publishL2CAPChannel(withEncryption: true)
+        switch peripheral.state {
+        case .poweredOn: peripheral.publishL2CAPChannel(withEncryption: true)
+        case .poweredOff: onError("Bluetooth is switched off.")
+        case .unauthorized: onError("Sotto does not have permission to use Bluetooth.")
+        case .unsupported: onError("This iPhone does not support Bluetooth LE.")
+        default: break
+        }
     }
 
     public func peripheralManager(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?) {
@@ -180,34 +191,72 @@ public final class BLEPeripheralHost: NSObject, CBPeripheralManagerDelegate, @un
     }
 }
 
-/// Central role: scans for the Sotto service, reads the PSM and opens the L2CAP channel.
+/// Central role: scans for the Sotto service, reads the peer's identity and PSM, and opens the
+/// L2CAP channel only when `BLERolePolicy` says this phone is the opener. Peripherals that the
+/// policy assigns the other way, or that are not in `acceptedIdentities` when that set is
+/// non-empty, are released and the scan resumes.
 public final class BLECentralClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, @unchecked Sendable {
     private var manager: CBCentralManager!
     private var peripheral: CBPeripheral?
+    private let localIdentity: String
+    private let acceptedIdentities: Set<String>
     private let onLink: @Sendable (BLEL2CAPLink, _ remoteIdentity: String?) -> Void
     private let onError: @Sendable (String) -> Void
     private var remoteIdentity: String?
+    private var psm: CBL2CAPPSM?
+    private var skipped: Set<UUID> = []
+    private var linkOpened = false
 
-    public init(onLink: @escaping @Sendable (BLEL2CAPLink, String?) -> Void, onError: @escaping @Sendable (String) -> Void) {
+    /// - Parameters:
+    ///   - localIdentity: this phone's stable identifier, compared with the peer's for the role policy.
+    ///   - acceptedIdentities: remembered partners; empty means accept anyone (first pairing).
+    public init(localIdentity: String, acceptedIdentities: Set<String> = [], onLink: @escaping @Sendable (BLEL2CAPLink, String?) -> Void, onError: @escaping @Sendable (String) -> Void) {
+        self.localIdentity = localIdentity
+        self.acceptedIdentities = acceptedIdentities
         self.onLink = onLink
         self.onError = onError
         super.init()
         manager = CBCentralManager(delegate: self, queue: DispatchQueue(label: "sotto.ble.central"))
     }
 
+    /// Stop looking for peers but keep a connection that carries an open channel.
+    public func stopScanning() {
+        manager.stopScan()
+        if !linkOpened, let p = peripheral { manager.cancelPeripheralConnection(p); peripheral = nil }
+    }
+
+    /// Full teardown, including the connection under an open channel.
     public func stop() {
         manager.stopScan()
         if let p = peripheral { manager.cancelPeripheralConnection(p) }
         peripheral = nil
     }
 
-    public func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        guard central.state == .poweredOn else { return }
+    private func scan(_ central: CBCentralManager) {
         central.scanForPeripherals(withServices: [SottoBLE.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
+    private func release(_ central: CBCentralManager, _ p: CBPeripheral) {
+        skipped.insert(p.identifier)
+        central.cancelPeripheralConnection(p)
+        peripheral = nil
+        remoteIdentity = nil
+        psm = nil
+        scan(central)
+    }
+
+    public func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        switch central.state {
+        case .poweredOn: scan(central)
+        case .poweredOff: onError("Bluetooth is switched off.")
+        case .unauthorized: onError("Sotto does not have permission to use Bluetooth.")
+        case .unsupported: onError("This iPhone does not support Bluetooth LE.")
+        default: break
+        }
+    }
+
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        guard self.peripheral == nil else { return }
+        guard self.peripheral == nil, !skipped.contains(peripheral.identifier) else { return }
         self.peripheral = peripheral
         peripheral.delegate = self
         central.stopScan()
@@ -221,6 +270,28 @@ public final class BLECentralClient: NSObject, CBCentralManagerDelegate, CBPerip
     public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: (any Error)?) {
         onError(error?.localizedDescription ?? "connect failed")
         self.peripheral = nil
+        scan(central)
+    }
+
+    public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
+        guard !linkOpened else { return }
+        self.peripheral = nil
+        scan(central)
+    }
+
+    /// Once both the identity and the PSM are known, apply the policy and open or release.
+    private func decide(_ peripheral: CBPeripheral) {
+        guard let remoteIdentity, let psm else { return }
+        if !acceptedIdentities.isEmpty, !acceptedIdentities.contains(remoteIdentity) {
+            release(manager, peripheral)
+            return
+        }
+        guard BLERolePolicy.shouldOpenChannel(localIdentity: localIdentity, remoteIdentity: remoteIdentity) else {
+            // The other phone is the opener; our peripheral will accept its channel.
+            release(manager, peripheral)
+            return
+        }
+        peripheral.openL2CAPChannel(psm)
     }
 
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
@@ -238,10 +309,11 @@ public final class BLECentralClient: NSObject, CBCentralManagerDelegate, CBPerip
         switch characteristic.uuid {
         case SottoBLE.identityCharacteristicUUID:
             remoteIdentity = String(decoding: data, as: UTF8.self)
+            decide(peripheral)
         case SottoBLE.psmCharacteristicUUID:
             guard data.count >= 2 else { return }
-            let psm = CBL2CAPPSM(littleEndian: data.withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) })
-            peripheral.openL2CAPChannel(psm)
+            psm = CBL2CAPPSM(littleEndian: data.withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) })
+            decide(peripheral)
         default:
             break
         }
@@ -250,6 +322,7 @@ public final class BLECentralClient: NSObject, CBCentralManagerDelegate, CBPerip
     public func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?) {
         if let error { onError(error.localizedDescription); return }
         guard let channel else { return }
+        linkOpened = true
         onLink(BLEL2CAPLink(channel: channel), remoteIdentity)
     }
 }

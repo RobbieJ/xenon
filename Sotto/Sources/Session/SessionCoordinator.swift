@@ -34,6 +34,9 @@ final class SessionCoordinator {
     /// Remembered partners, most recent first. Persisted in UserDefaults.
     private(set) var partners: [Partner] = []
     var pairingSheet: PairingSheet?
+    /// Set when a phone we have never talked to connects over Bluetooth; the user confirms or ends.
+    var unknownPartnerName: String?
+    private var lastTransport: LinkKind?
     let displayName: String
     let deviceIdentifier: String
     private var linkTask: Task<Void, Never>?
@@ -135,6 +138,8 @@ final class SessionCoordinator {
     private func handle(_ event: ConversationPipeline.Event) {
         switch event {
         case .partnerHello(let name, let id):
+            let isNew = !partners.contains { $0.id == id }
+            if isNew, !partners.isEmpty, lastTransport == .bleL2CAP { unknownPartnerName = name }
             remember(Partner(id: id, displayName: name, lastSeen: Date()))
             if case .connected(_, let kind) = state { state = .connected(Partner(id: id, displayName: name, lastSeen: Date()), over: kind) }
             if case .connecting(_, let kind) = state { state = .connecting(Partner(id: id, displayName: name, lastSeen: Date()), over: kind) }
@@ -143,7 +148,7 @@ final class SessionCoordinator {
         case .quality(let q): linkQuality = q
         case .jitter(let s): jitterStatistics = s
         case .route(let r): routeSummary = r
-        case .linkClosed: apply(.linkDropped)
+        case .linkClosed: linkDidClose()
         case .partnerBye:
             #if canImport(LiveCommunicationKit)
             call.reportRemoteEnded()
@@ -210,6 +215,10 @@ final class SessionCoordinator {
     /// If both phones tap Talk at once each may briefly hold two links; the later one is closed.
     func talk() {
         apply(.start)
+        startWiFiAwareTalk()
+    }
+
+    private func startWiFiAwareTalk() {
         linkTask?.cancel()
         linkTask = Task { [weak self] in
             await withTaskGroup(of: (any Link)?.self) { group in
@@ -242,7 +251,10 @@ final class SessionCoordinator {
         apply(.reset)
     }
 
+    #endif
+
     private func begin(link: any Link, kind: LinkKind) {
+        lastTransport = kind
         let placeholder = partners.first ?? Partner(id: "pending", displayName: "Partner")
         apply(.linkEstablished(placeholder, kind))
         start(link: link, partner: placeholder, codec: kind == .bleL2CAP ? .bleL2CAP : .wifiAware)
@@ -252,7 +264,44 @@ final class SessionCoordinator {
         lastError = String(describing: error)
         apply(.failure(lastError ?? "failed"))
     }
-    #endif
+
+    /// Link dropped: stop the media, then retry the same transport a few times before giving up.
+    private func linkDidClose() {
+        pipeline?.stop()
+        pipeline = nil
+        stopBluetooth()
+        apply(.linkDropped)
+        scheduleReconnect(attempt: 1)
+    }
+
+    private func scheduleReconnect(attempt: Int) {
+        guard case .reconnecting = state else { return }
+        if attempt > SessionReducer.maximumReconnectAttempts {
+            apply(.reconnectGaveUp)
+            #if canImport(LiveCommunicationKit)
+            Task { await call.end() }
+            #endif
+            return
+        }
+        apply(.reconnectAttempt(attempt))
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, case .reconnecting = self.state else { return }
+            switch self.lastTransport {
+            #if canImport(CoreBluetooth)
+            case .bleL2CAP: self.startBluetoothRoles()
+            #endif
+            #if canImport(WiFiAware)
+            case .wifiAware: self.startWiFiAwareTalk()
+            #endif
+            default: self.apply(.reconnectGaveUp)
+            }
+            // If nothing connected by the next tick, try again.
+            try? await Task.sleep(for: .seconds(8))
+            guard case .reconnecting = self.state else { return }
+            self.scheduleReconnect(attempt: attempt + 1)
+        }
+    }
 
     #if canImport(CoreBluetooth)
     /// Bluetooth-only path (ADR-0002 fallback): both phones advertise and scan at once; the first
@@ -261,28 +310,48 @@ final class SessionCoordinator {
     func talkOverBluetooth() {
         apply(.start)
         apply(.pairRequested)
+        startBluetoothRoles()
+    }
+
+    /// Both roles run; `BLERolePolicy` guarantees only one channel forms between a given pair.
+    private func startBluetoothRoles() {
         stopBluetooth()
+        lastTransport = .bleL2CAP
+        let known = Set(partners.map(\.id))
         blePeripheral = BLEPeripheralHost(identity: deviceIdentifier, onLink: { [weak self] link in
-            Task { @MainActor in self?.bluetoothLinkOpened(link) }
+            Task { @MainActor in self?.bluetoothLinkOpened(link, remoteIdentity: nil, asCentral: false) }
         }, onError: { [weak self] message in
-            Task { @MainActor in self?.lastError = message }
+            Task { @MainActor in self?.bluetoothFailed(message) }
         })
-        bleCentral = BLECentralClient(onLink: { [weak self] link, _ in
-            Task { @MainActor in self?.bluetoothLinkOpened(link) }
+        // First pairing accepts anyone (the user confirmed the iOS pairing prompt); later sessions
+        // only open channels to remembered partners. The peripheral side is checked on hello.
+        bleCentral = BLECentralClient(localIdentity: deviceIdentifier, acceptedIdentities: known, onLink: { [weak self] link, remote in
+            Task { @MainActor in self?.bluetoothLinkOpened(link, remoteIdentity: remote, asCentral: true) }
         }, onError: { [weak self] message in
-            Task { @MainActor in self?.lastError = message }
+            Task { @MainActor in self?.bluetoothFailed(message) }
         })
     }
 
-    private func bluetoothLinkOpened(_ link: BLEL2CAPLink) {
+    private func bluetoothFailed(_ message: String) {
+        lastError = message
+        // Radio-level failures (Bluetooth off, no permission) end the attempt; transient ones keep scanning.
+        if message.hasPrefix("Bluetooth is") || message.hasPrefix("Sotto does not") || message.hasPrefix("This iPhone") {
+            stopBluetooth()
+            apply(.failure(message))
+        }
+    }
+
+    private func bluetoothLinkOpened(_ link: BLEL2CAPLink, remoteIdentity: String?, asCentral: Bool) {
         guard state.partner == nil else {
-            Task { await link.close() }   // a second channel raced in; keep the first
+            Task { await link.close() }   // should not happen under the role policy; keep the first
             return
         }
-        // Keep the role that produced the link; stop the other to free the radio.
-        bleCentral?.stop()
-        blePeripheral?.stop()
+        // Stop discovery on both roles without disturbing the connection that carries the channel.
+        if asCentral { blePeripheral?.stop(); bleCentral?.stopScanning() } else { bleCentral?.stop(); blePeripheral?.stopAdvertising() }
         begin(link: link, kind: .bleL2CAP)
+        if let remoteIdentity, !partners.contains(where: { $0.id == remoteIdentity }), !partners.isEmpty {
+            unknownPartnerName = remoteIdentity
+        }
     }
 
     private func stopBluetooth() {

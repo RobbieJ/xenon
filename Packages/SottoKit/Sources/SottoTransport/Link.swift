@@ -45,3 +45,13 @@ public protocol Link: AnyObject, Sendable {
     func send(_ packet: Packet) async throws
     func close() async
 }
+
+/// Which phone opens the BLE L2CAP channel when both run both roles. Deterministic on both sides
+/// without any prior exchange: the phone with the lexicographically lower identity acts as the
+/// central and opens the channel; the other only accepts as the peripheral. The BLE equivalent of
+/// `PairingRace`, so the two phones never keep different channels.
+public enum BLERolePolicy {
+    public static func shouldOpenChannel(localIdentity: String, remoteIdentity: String) -> Bool {
+        localIdentity < remoteIdentity
+    }
+}

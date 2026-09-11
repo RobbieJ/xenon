@@ -142,8 +142,17 @@ struct ConnectingView: View {
     var body: some View {
         VStack(spacing: 16) {
             ProgressView()
-            Text("Connecting…")
+            if case .reconnecting(_, let attempt) = session.state {
+                Text("Connection lost. Reconnecting (\(attempt) of \(SessionReducer.maximumReconnectAttempts))…")
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("Connecting…")
+            }
+            if let err = session.lastError {
+                Text(err).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center).padding(.horizontal)
+            }
             Button("Cancel", role: .cancel) { session.end() }
         }
+        .padding()
     }
 }

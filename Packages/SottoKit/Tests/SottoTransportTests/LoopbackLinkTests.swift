@@ -43,3 +43,14 @@ import SottoCore
         await #expect(throws: LinkError.notReady) { try await pair.b.send(Packet(kind: .control, sequence: 0, timestamp: 0, payload: [])) }
     }
 }
+
+@Suite struct BLERolePolicyTests {
+    @Test func exactlyOneSideOpens() {
+        let ids = ["0A1", "ZZZ", "abc", "abd"]
+        for a in ids { for b in ids where a != b {
+            let aOpens = BLERolePolicy.shouldOpenChannel(localIdentity: a, remoteIdentity: b)
+            let bOpens = BLERolePolicy.shouldOpenChannel(localIdentity: b, remoteIdentity: a)
+            #expect(aOpens != bOpens)
+        } }
+    }
+}
