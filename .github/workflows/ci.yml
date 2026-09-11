@@ -54,7 +54,7 @@ jobs:
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "=== DeviceDiscoveryUI (Swift interfaces and ObjC header)"
           for f in $(find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework" -name '*.swiftinterface' | grep arm64e); do echo "--- $f"; grep -nE 'DevicePicker|DevicePairing|func |init' "$f" | head -60 || true; done
-          find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework/Headers" -name '*.h' | while read h; do echo "--- $h"; grep -nE '^@interface|^- \(|^\+ \(|^@property|typedef' "$h"; done
+          find "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework/Headers" -name '*.h' | while read h; do echo "--- $h"; grep -nE '^@interface|^- \(|^\+ \(|^@property|typedef' "$h" || true; done
           ls "$SDK/System/Library/Frameworks/DeviceDiscoveryUI.framework/Modules" 2>/dev/null
           f=$(find "$SDK/System/Library/Frameworks/LiveCommunicationKit.framework" -name 'arm64e*.swiftinterface' | head -1)
           echo "=== LiveCommunicationKit (manager, delegate, events)"
