@@ -78,10 +78,18 @@ struct HomeView: View {
                     Button("Show a code") { session.reset(); session.pairAsHost() }
                     Button("Enter a code") { session.reset(); session.pairAsGuest() }
                 }
-            if !session.isWiFiAwareSupported {
-                Text("This iPhone does not support Wi-Fi Aware. Bluetooth pairing arrives in a later build.")
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            #endif
+            #if canImport(CoreBluetooth)
+            Button {
+                session.reset()
+                session.talkOverBluetooth()
+            } label: {
+                Label("Talk over Bluetooth only", systemImage: "antenna.radiowaves.left.and.right")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.bordered)
+            Text("For Airplane Mode with Wi-Fi off, or iPhones without Wi-Fi Aware. Lower quality; both phones tap this.")
+                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             #endif
             Toggle("Simulate a poor link", isOn: $impaired)
                 .padding(.horizontal)

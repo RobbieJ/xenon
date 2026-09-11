@@ -37,6 +37,10 @@ final class SessionCoordinator {
     let displayName: String
     let deviceIdentifier: String
     private var linkTask: Task<Void, Never>?
+    #if canImport(CoreBluetooth)
+    private var blePeripheral: BLEPeripheralHost?
+    private var bleCentral: BLECentralClient?
+    #endif
 
     private var pipeline: ConversationPipeline?
     private var loopbackPair: LoopbackLinkPair?
@@ -234,19 +238,59 @@ final class SessionCoordinator {
         pairingSheet = nil
         linkTask?.cancel()
         linkTask = nil
+        stopBluetooth()
         apply(.reset)
     }
 
     private func begin(link: any Link, kind: LinkKind) {
         let placeholder = partners.first ?? Partner(id: "pending", displayName: "Partner")
         apply(.linkEstablished(placeholder, kind))
-        start(link: link, partner: placeholder, codec: .wifiAware)
+        start(link: link, partner: placeholder, codec: kind == .bleL2CAP ? .bleL2CAP : .wifiAware)
     }
 
     private func fail(_ error: any Error) {
         lastError = String(describing: error)
         apply(.failure(lastError ?? "failed"))
     }
+    #endif
+
+    #if canImport(CoreBluetooth)
+    /// Bluetooth-only path (ADR-0002 fallback): both phones advertise and scan at once; the first
+    /// L2CAP channel to open wins and the other role is torn down. The channel is published with
+    /// encryption, so iOS shows its own Bluetooth pairing confirmation on both phones the first time.
+    func talkOverBluetooth() {
+        apply(.start)
+        apply(.pairRequested)
+        stopBluetooth()
+        blePeripheral = BLEPeripheralHost(identity: deviceIdentifier, onLink: { [weak self] link in
+            Task { @MainActor in self?.bluetoothLinkOpened(link) }
+        }, onError: { [weak self] message in
+            Task { @MainActor in self?.lastError = message }
+        })
+        bleCentral = BLECentralClient(onLink: { [weak self] link, _ in
+            Task { @MainActor in self?.bluetoothLinkOpened(link) }
+        }, onError: { [weak self] message in
+            Task { @MainActor in self?.lastError = message }
+        })
+    }
+
+    private func bluetoothLinkOpened(_ link: BLEL2CAPLink) {
+        guard state.partner == nil else {
+            Task { await link.close() }   // a second channel raced in; keep the first
+            return
+        }
+        // Keep the role that produced the link; stop the other to free the radio.
+        bleCentral?.stop()
+        blePeripheral?.stop()
+        begin(link: link, kind: .bleL2CAP)
+    }
+
+    private func stopBluetooth() {
+        bleCentral?.stop(); bleCentral = nil
+        blePeripheral?.stop(); blePeripheral = nil
+    }
+    #else
+    private func stopBluetooth() {}
     #endif
 
     func toggleMute() {
@@ -263,6 +307,7 @@ final class SessionCoordinator {
         loopbackPair = nil
         linkTask?.cancel()
         linkTask = nil
+        stopBluetooth()
         #if canImport(LiveCommunicationKit)
         if !fromSystem { Task { await call.end() } }
         #endif
