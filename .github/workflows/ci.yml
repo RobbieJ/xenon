@@ -30,7 +30,7 @@ jobs:
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
       - name: Install libopus so the codec wrapper is exercised for real
-        run: brew install opus
+        run: brew install opus pkgconf
       - name: Test
         working-directory: Packages/SottoKit
         run: swift test --parallel
